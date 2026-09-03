@@ -124,6 +124,19 @@ final class FocoDSBridge {
             return
         }
 
+        // Current State inspection
+        if method == "GET" && path.starts(with: "/current-state") {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                var stateJson = "{}"
+                if let m = self.model {
+                    stateJson = "{\"isTracking\": \(m.isTracking), \"taskTitle\": \"\(m.taskTitle)\", \"timeSpentMs\": \(m.timeSpentMs), \"formattedTime\": \"\(m.formattedTime)\", \"habitsCount\": \(m.habits.count)}"
+                }
+                self.sendResponse(connection: connection, status: "200 OK", body: stateJson)
+            }
+            return
+        }
+
         // Commands polling by Super Productivity plugin
         if method == "GET" && path.starts(with: "/commands") {
             let cmds = popAllCommands()

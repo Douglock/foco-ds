@@ -58,54 +58,95 @@ function getTodayStr() {
   return `${year}-${month}-${day}`;
 }
 
+// Global runtime state
+const state = {
+  running: false,
+  activeTaskId: null,
+};
+
 let lastPayloadString = "";
-let wasTracking = false;
 let previousIsBreak = false;
 let previousRemaining = 0;
+let isSyncing = false;
 
 async function syncState() {
+  if (isSyncing) return;
+  isSyncing = true;
+
   try {
     let activeTask = null;
-    let isTracking = false;
     let isBreak = false;
     let remainingSeconds = 0;
     let focusDurationSeconds = 25 * 60;
     let mappedHabits = [];
+    let allTasks = [];
+    let appState = null;
 
     if (typeof PluginAPI !== "undefined") {
-      let appState = null;
+      // 1. Fetch appState
       if (typeof PluginAPI.getAppState === "function") {
         try {
           appState = await PluginAPI.getAppState();
         } catch (e) {}
       }
 
-      // Check current active task
-      const currentTaskId = appState?.tasks?.currentTaskId ? String(appState.tasks.currentTaskId) : null;
-      let allTasks = [];
-      if (typeof PluginAPI.getTasks === "function") {
+      // 2. Fetch Tasks list
+      try {
+        if (typeof PluginAPI.getTasks === "function") {
+          const list = await PluginAPI.getTasks();
+          if (Array.isArray(list) && list.length > 0) allTasks = list;
+        }
+      } catch (e) {}
+
+      if (allTasks.length === 0 && typeof PluginAPI.getCurrentContextTasks === "function") {
         try {
-          allTasks = await PluginAPI.getTasks();
+          const ctxList = await PluginAPI.getCurrentContextTasks();
+          if (Array.isArray(ctxList) && ctxList.length > 0) allTasks = ctxList;
         } catch (e) {}
       }
 
+      // Merge entities from appState if needed
+      const taskStore = appState?.tasks || appState?.task || appState?.TASK || appState?.TASKS;
+      if (allTasks.length === 0 && taskStore?.entities) {
+        allTasks = Object.values(taskStore.entities).filter(Boolean);
+      }
+
+      // 3. Resolve active currentTaskId
+      const currentTaskId =
+        state.activeTaskId ||
+        appState?.task?.currentTaskId ||
+        appState?.tasks?.currentTaskId ||
+        taskStore?.currentTaskId ||
+        null;
+
       if (currentTaskId) {
-        if (Array.isArray(allTasks)) {
-          activeTask = allTasks.find(t => String(t.id) === currentTaskId);
-        }
-        if (!activeTask && appState?.tasks?.entities) {
-          activeTask = appState.tasks.entities[currentTaskId];
+        activeTask = allTasks.find(t => String(t.id) === String(currentTaskId));
+        if (!activeTask && taskStore?.entities && taskStore.entities[currentTaskId]) {
+          activeTask = taskStore.entities[currentTaskId];
         }
       }
 
-      // Determine if timer is tracking
-      const isTimeTracking = Boolean(appState?.timeTracking?.isTracking || currentTaskId);
-      isTracking = Boolean(activeTask && isTimeTracking);
+      // Fallback: check getSelectedTask
+      if (!activeTask && state.running && typeof PluginAPI.getSelectedTask === "function") {
+        try {
+          const selected = await PluginAPI.getSelectedTask();
+          if (selected && selected.id) {
+            activeTask = selected;
+            state.activeTaskId = String(selected.id);
+          }
+        } catch (e) {}
+      }
 
-      // Check pomodoro break status
+      // Check if time is tracking
+      const isTimeTracking = Boolean(
+        state.running ||
+        appState?.timeTracking?.isTracking ||
+        (appState?.task && appState.task.currentTaskId) ||
+        (appState?.tasks && appState.tasks.currentTaskId)
+      );
+
+      // Pomodoro timing & break
       isBreak = Boolean(appState?.pomodoro?.isBreak);
-
-      // Pomodoro timing
       if (appState?.pomodoro) {
         if (typeof appState.pomodoro.currentCycleDuration === "number") {
           focusDurationSeconds = Math.round(appState.pomodoro.currentCycleDuration / 1000);
@@ -146,6 +187,8 @@ async function syncState() {
       }
     }
 
+    const isTracking = Boolean(activeTask && (state.running || appState?.timeTracking?.isTracking || activeTask.isCurrent));
+
     // Detect focus completion
     let forceFinishedAlert = false;
     if (!previousIsBreak && isBreak) {
@@ -155,15 +198,14 @@ async function syncState() {
       forceFinishedAlert = true;
     }
 
-    wasTracking = isTracking;
     previousIsBreak = isBreak;
     previousRemaining = remainingSeconds;
 
     // Prepare payload
-    const title = activeTask?.title ? String(activeTask.title) : "";
+    const title = isTracking && activeTask?.title ? String(activeTask.title) : "";
     const timeSpentMs = activeTask?.timeSpent || 0;
     const timeEstimateMs = activeTask?.timeEstimate || 0;
-    const taskId = activeTask?.id ? String(activeTask.id) : null;
+    const taskId = isTracking && activeTask?.id ? String(activeTask.id) : null;
     const taskNotes = String(activeTask?.notes || "");
 
     const payload = {
@@ -190,7 +232,7 @@ async function syncState() {
       }).catch(() => {});
     }
 
-    // Poll and execute commands
+    // Poll commands from Foco DS
     try {
       const cmdRes = await fetch(`${FOCO_DS_BRIDGE_URL}/commands`);
       if (cmdRes.ok) {
@@ -198,6 +240,8 @@ async function syncState() {
         if (Array.isArray(commands)) {
           for (const cmd of commands) {
             if (cmd.type === "focus_task" && cmd.taskId) {
+              state.activeTaskId = String(cmd.taskId);
+              state.running = true;
               if (typeof PluginAPI.dispatchAction === "function") {
                 PluginAPI.dispatchAction({ type: "[Task] SetCurrentTask", id: cmd.taskId });
                 PluginAPI.dispatchAction({ type: "[Task] SelectTask", id: cmd.taskId });
@@ -234,26 +278,64 @@ async function syncState() {
       }
     } catch (e) {}
 
-  } catch (err) {}
+  } catch (err) {
+  } finally {
+    isSyncing = false;
+  }
 }
 
-// Instant hook registration
+// Register Hooks
 function registerHooks() {
   if (typeof PluginAPI !== "undefined" && typeof PluginAPI.registerHook === "function") {
-    const hooks = [
+    // Current task change hook
+    try {
+      PluginAPI.registerHook("currentTaskChange", (payload) => {
+        const current = payload && payload.current ? payload.current : payload;
+        if (current && current.id) {
+          state.activeTaskId = String(current.id);
+          state.running = true;
+        } else {
+          state.running = false;
+        }
+        setTimeout(syncState, 20);
+      });
+    } catch (e) {}
+
+    // Action hook
+    try {
+      PluginAPI.registerHook("action", (payload) => {
+        const action = payload && payload.action ? payload.action : payload;
+        if (!action || !action.type) return;
+
+        if (action.type === "[Task] SetCurrentTask") {
+          if (action.id) {
+            state.activeTaskId = String(action.id);
+            state.running = true;
+          } else {
+            state.running = false;
+          }
+          setTimeout(syncState, 20);
+        } else if (action.type === "[Task] Toggle start") {
+          state.running = !state.running;
+          setTimeout(syncState, 20);
+        } else if (action.type.includes("TimeTracking") || action.type.includes("Task")) {
+          setTimeout(syncState, 40);
+        }
+      });
+    } catch (e) {}
+
+    // Other life-cycle hooks
+    [
       "taskCreated",
       "taskUpdate",
       "taskComplete",
       "taskDelete",
       "anyTaskUpdate",
-      "currentTaskChange",
-      "action",
       "workContextChange"
-    ];
-    hooks.forEach((h) => {
+    ].forEach((h) => {
       try {
         PluginAPI.registerHook(h, () => {
-          setTimeout(syncState, 30);
+          setTimeout(syncState, 50);
         });
       } catch (e) {}
     });
@@ -262,4 +344,4 @@ function registerHooks() {
 
 registerHooks();
 setInterval(syncState, SYNC_INTERVAL_MS);
-syncState();
+setTimeout(syncState, 50);

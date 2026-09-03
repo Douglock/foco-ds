@@ -1,10 +1,10 @@
 /**
  * Foco DS — Super Productivity Integration Plugin
- * Minimalist, ultra-lightweight status broadcaster & bidirectional habits/task sync.
+ * Real-time active task and habits sync.
  */
 
 const FOCO_DS_BRIDGE_URL = "http://127.0.0.1:28475";
-const SYNC_INTERVAL_MS = 1000;
+const SYNC_INTERVAL_MS = 500;
 
 const emojiRegex = /(\p{Extended_Pictographic}|\p{Emoji_Presentation})/u;
 
@@ -72,7 +72,6 @@ async function syncState() {
     let focusDurationSeconds = 25 * 60;
     let mappedHabits = [];
 
-    // 1. Fetch data from PluginAPI if available
     if (typeof PluginAPI !== "undefined") {
       let appState = null;
       if (typeof PluginAPI.getAppState === "function") {
@@ -81,25 +80,29 @@ async function syncState() {
         } catch (e) {}
       }
 
-      // Check active currentTaskId
+      // Check current active task
       const currentTaskId = appState?.tasks?.currentTaskId ? String(appState.tasks.currentTaskId) : null;
+      let allTasks = [];
+      if (typeof PluginAPI.getTasks === "function") {
+        try {
+          allTasks = await PluginAPI.getTasks();
+        } catch (e) {}
+      }
+
       if (currentTaskId) {
-        // Look up task in entities or via getTasks
-        if (appState?.tasks?.entities && appState.tasks.entities[currentTaskId]) {
+        if (Array.isArray(allTasks)) {
+          activeTask = allTasks.find(t => String(t.id) === currentTaskId);
+        }
+        if (!activeTask && appState?.tasks?.entities) {
           activeTask = appState.tasks.entities[currentTaskId];
-          isTracking = true;
-        } else if (typeof PluginAPI.getTasks === "function") {
-          try {
-            const allTasks = await PluginAPI.getTasks();
-            if (Array.isArray(allTasks)) {
-              activeTask = allTasks.find(t => String(t.id) === currentTaskId);
-              if (activeTask) isTracking = true;
-            }
-          } catch (e) {}
         }
       }
 
-      // Check break status
+      // Determine if timer is tracking
+      const isTimeTracking = Boolean(appState?.timeTracking?.isTracking || currentTaskId);
+      isTracking = Boolean(activeTask && isTimeTracking);
+
+      // Check pomodoro break status
       isBreak = Boolean(appState?.pomodoro?.isBreak);
 
       // Pomodoro timing
@@ -143,7 +146,7 @@ async function syncState() {
       }
     }
 
-    // 2. Detect focus completion
+    // Detect focus completion
     let forceFinishedAlert = false;
     if (!previousIsBreak && isBreak) {
       forceFinishedAlert = true;
@@ -156,7 +159,7 @@ async function syncState() {
     previousIsBreak = isBreak;
     previousRemaining = remainingSeconds;
 
-    // 3. Prepare payload
+    // Prepare payload
     const title = activeTask?.title ? String(activeTask.title) : "";
     const timeSpentMs = activeTask?.timeSpent || 0;
     const timeEstimateMs = activeTask?.timeEstimate || 0;
@@ -178,7 +181,6 @@ async function syncState() {
     };
 
     const payloadString = JSON.stringify(payload);
-    // Send state update
     if (payloadString !== lastPayloadString || forceFinishedAlert) {
       lastPayloadString = payloadString;
       await fetch(`${FOCO_DS_BRIDGE_URL}/state`, {
@@ -188,7 +190,7 @@ async function syncState() {
       }).catch(() => {});
     }
 
-    // 4. Poll and execute bidirectional commands from Foco DS
+    // Poll and execute commands
     try {
       const cmdRes = await fetch(`${FOCO_DS_BRIDGE_URL}/commands`);
       if (cmdRes.ok) {
@@ -226,21 +228,38 @@ async function syncState() {
                   id: cmd.habitId
                 });
               }
-            } else if (cmd.type === "open_habits") {
-              if (typeof window !== "undefined") {
-                window.location.hash = "#/habits";
-              }
             }
           }
         }
       }
     } catch (e) {}
 
-  } catch (err) {
-    // Silent failover
+  } catch (err) {}
+}
+
+// Instant hook registration
+function registerHooks() {
+  if (typeof PluginAPI !== "undefined" && typeof PluginAPI.registerHook === "function") {
+    const hooks = [
+      "taskCreated",
+      "taskUpdate",
+      "taskComplete",
+      "taskDelete",
+      "anyTaskUpdate",
+      "currentTaskChange",
+      "action",
+      "workContextChange"
+    ];
+    hooks.forEach((h) => {
+      try {
+        PluginAPI.registerHook(h, () => {
+          setTimeout(syncState, 30);
+        });
+      } catch (e) {}
+    });
   }
 }
 
-// Start continuous loop
+registerHooks();
 setInterval(syncState, SYNC_INTERVAL_MS);
 syncState();

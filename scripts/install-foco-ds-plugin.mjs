@@ -44,18 +44,24 @@ async function main() {
 
   console.log("1. Navegando para Configurações...");
   await send("Runtime.evaluate", { expression: "window.location.hash = '#/config';" });
-  await new Promise((r) => setTimeout(r, 1200));
+  await new Promise((r) => setTimeout(r, 1000));
 
-  console.log("2. Clicando na aba Plugins...");
-  await send("Runtime.evaluate", {
+  console.log("2. Clicando na aba Plugins (Tab 4 - extension)...");
+  const tabResult = await send("Runtime.evaluate", {
     expression: `
       (() => {
-        const tabs = Array.from(document.querySelectorAll('.mat-mdc-tab, .mat-tab-label, button, a'));
-        const pluginTab = tabs.find(t => (t.innerText || '').toLowerCase().includes('plugin'));
-        if (pluginTab) pluginTab.click();
+        const tabs = Array.from(document.querySelectorAll(".mat-mdc-tab, .mat-tab-label, [role=\\"tab\\"]"));
+        const extTab = tabs.find(t => t.innerText.includes("extension") || t.innerHTML.includes("extension") || (t.innerText || '').toLowerCase().includes("plugin"));
+        if (extTab) {
+          extTab.click();
+          return { ok: true, text: extTab.innerText };
+        }
+        return { ok: false };
       })()
     `,
+    returnByValue: true
   });
+  console.log("Resultado da aba:", tabResult?.result?.value);
   await new Promise((r) => setTimeout(r, 1200));
 
   console.log("3. Injetando ZIP do Foco DS...");
@@ -80,7 +86,7 @@ async function main() {
         const file = new File([blob], "foco-ds-super-productivity.zip", { type: "application/zip" });
         
         const input = document.querySelector("input[type=\\"file\\"][accept*=\\"zip\\"]") || document.querySelector("input[type=\\"file\\"]");
-        if (!input) return { ok: false, error: "Input não encontrado" };
+        if (!input) return { ok: false, error: "Input de ZIP não encontrado" };
         
         const dt = new DataTransfer();
         dt.items.add(file);
@@ -96,77 +102,60 @@ async function main() {
   await new Promise((r) => setTimeout(r, 1500));
 
   console.log("4. Confirmando diálogos de permissão / instalação...");
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    await send("Runtime.evaluate", {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const dialogRes = await send("Runtime.evaluate", {
       expression: `
         (() => {
           const dialogBtns = Array.from(document.querySelectorAll('mat-dialog-container button, .mat-mdc-dialog-container button, .cdk-overlay-container button'));
+          const clicked = [];
           for (const b of dialogBtns) {
             const t = (b.innerText || '').toLowerCase();
             if (['instalar','install','salvar','save','ok','permitir','confirm','continuar','continue','adicionar','add','carregar','load'].some(x => t.includes(x))) {
               b.click();
+              clicked.push(t);
             }
           }
+          return { clicked };
         })()
       `,
+      returnByValue: true
     });
-    await new Promise((r) => setTimeout(r, 900));
+    console.log(`Tentativa ${attempt + 1}:`, dialogRes?.result?.value);
+    await new Promise((r) => setTimeout(r, 800));
   }
 
-  console.log("5. Garantindo que o plugin está ATIVADO...");
+  console.log("5. Verificando toggle do Foco DS...");
   const toggleResult = await send("Runtime.evaluate", {
     expression: `
       (() => {
-        const toggles = Array.from(document.querySelectorAll(
-          'mat-slide-toggle input, .mdc-switch input, mat-slide-toggle button, .mat-mdc-slide-toggle button, .mat-mdc-slide-toggle, [role="switch"], input[type="checkbox"]'
-        ));
-        const toggle = toggles.find((candidate) => {
-          let node = candidate;
-          for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-            const text = node.innerText || '';
-            if (text.includes('Foco DS') || text.includes('foco-ds')) return true;
-          }
-          return false;
-        });
-        if (!toggle) {
-          const candidates = Array.from(document.querySelectorAll('button'));
-          const enableButton = candidates.find((button) => {
-            const label = (button.innerText || button.getAttribute('aria-label') || '').toLowerCase();
-            if (!(label.includes('ativar') || label.includes('enable'))) return false;
-            let node = button;
-            for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-              const text = node.innerText || '';
-              if (text.includes('Foco DS') || text.includes('foco-ds')) return true;
-            }
-            return false;
-          });
-          if (enableButton) {
-            enableButton.click();
-            return { found: true, wasChecked: false, clicked: true, control: 'button' };
-          }
-          return { found: false };
+        const rows = Array.from(document.querySelectorAll("mat-card, .mat-mdc-card, tr, li, div"));
+        const focoRow = rows.find(r => (r.innerText || '').includes("Foco DS") || (r.innerText || '').includes("foco-ds"));
+        if (!focoRow) {
+          return { found: false, plugins: Array.from(document.querySelectorAll("h3, h4, strong")).map(h => h.innerText) };
         }
-        const wasChecked = Boolean(toggle.checked || toggle.getAttribute('aria-checked') === 'true');
-        if (!wasChecked) toggle.click();
-        return { found: true, wasChecked, clicked: !wasChecked };
+        const toggle = focoRow.querySelector('mat-slide-toggle input, .mdc-switch input, [role="switch"], input[type="checkbox"]');
+        if (toggle) {
+          const wasChecked = Boolean(toggle.checked || toggle.getAttribute('aria-checked') === 'true');
+          if (!wasChecked) toggle.click();
+          return { found: true, wasChecked, activated: !wasChecked };
+        }
+        return { found: true, noToggle: true };
       })()
     `,
     returnByValue: true
   });
-  console.log("Status do Toggle:", toggleResult?.result?.value);
+  console.log("Status do Plugin:", toggleResult?.result?.value);
 
-  await new Promise((r) => setTimeout(r, 1000));
-
-  console.log("6. Retornando para hábitos...");
+  console.log("6. Retornando para tarefas de hoje...");
   await send("Runtime.evaluate", {
     expression: `
-      window.location.hash = '#/habits';
+      window.location.hash = '#/tag/TODAY/tasks';
     `,
   });
 
-  await new Promise((r) => setTimeout(r, 800));
+  await new Promise((r) => setTimeout(r, 1000));
   ws.close();
-  console.log("🎉 Plugin Foco DS instalado e ativo no Super Productivity!");
+  console.log("🎉 Concluído!");
 }
 
 main().catch(console.error);

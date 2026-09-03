@@ -2,18 +2,35 @@ import Foundation
 import SwiftUI
 import Combine
 
+struct HabitItem: Identifiable, Codable, Equatable {
+    let id: String
+    let title: String
+    let emoji: String
+    let count: Int?
+    let isOn: Bool?
+}
+
 @MainActor
 final class FocoDSModel: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var isTracking: Bool = false
     @Published var isBreak: Bool = false
-    @Published var taskTitle: String = "Foco DS"
+    @Published var taskTitle: String = ""
     @Published var timeSpentMs: Int64 = 0
     @Published var timeEstimateMs: Int64 = 0
     @Published var remainingSeconds: Int64 = 0
     @Published var focusDurationSeconds: Int64 = 0
     @Published var taskId: String? = nil
     @Published var lastUpdated: Date = Date()
+
+    // Habits List from Super Productivity
+    @Published var habits: [HabitItem] = [
+        HabitItem(id: "coffee", title: "Coffee Counter", emoji: "☕", count: 0, isOn: false),
+        HabitItem(id: "treino", title: "Treino", emoji: "🏋️", count: 0, isOn: false),
+        HabitItem(id: "agua", title: "Água 500ml", emoji: "🥤", count: 0, isOn: false),
+        HabitItem(id: "ler", title: "Ler por 30 min", emoji: "📚", count: 0, isOn: false),
+        HabitItem(id: "alongar", title: "Desaquecimento", emoji: "🧎", count: 0, isOn: false)
+    ]
 
     // Notes Sync State
     @Published var isSideNotesOpen: Bool = false
@@ -23,9 +40,11 @@ final class FocoDSModel: ObservableObject {
     // Visual Flash Pulse on Pill
     @Published var isPillFlashing: Bool = false
 
-    // Callback when notes change to send to Super Productivity
+    // Callbacks to send commands to Super Productivity
     var onNotesSaved: ((_ taskId: String, _ notes: String) -> Void)?
     var onToggleNotesPanel: (() -> Void)?
+    var onHabitClicked: ((_ habitId: String) -> Void)?
+    var onTaskClicked: ((_ taskId: String?) -> Void)?
 
     private var timerCancellable: AnyCancellable?
     private var previousIsBreak: Bool = false
@@ -35,7 +54,7 @@ final class FocoDSModel: ObservableObject {
     init() {
         self.notesText = UserDefaults.standard.string(forKey: "foco_ds_side_notes") ?? ""
 
-        // Keep local clock ticking smoothly every second
+        // Local clock ticking smoothly every second
         timerCancellable = Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -60,12 +79,13 @@ final class FocoDSModel: ObservableObject {
         isBreak: Bool = false,
         taskId: String? = nil,
         taskNotes: String? = nil,
+        habits: [HabitItem]? = nil,
         forceFinishedAlert: Bool = false
     ) {
         let cleanTitle = taskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         self.isConnected = true
-        self.isTracking = isTracking
-        self.taskTitle = cleanTitle.isEmpty ? "Foco DS" : cleanTitle
+        self.isTracking = isTracking && !cleanTitle.isEmpty
+        self.taskTitle = cleanTitle
         self.timeSpentMs = max(0, timeSpentMs)
         self.timeEstimateMs = max(0, timeEstimateMs)
         self.remainingSeconds = max(0, remainingSeconds)
@@ -75,6 +95,10 @@ final class FocoDSModel: ObservableObject {
         self.isBreak = isBreak
         self.taskId = taskId
         self.lastUpdated = Date()
+
+        if let incomingHabits = habits, !incomingHabits.isEmpty {
+            self.habits = incomingHabits
+        }
 
         // Sync notes from Super Productivity if not actively editing
         if let incomingNotes = taskNotes, !self.isEditingNotes {
@@ -125,6 +149,14 @@ final class FocoDSModel: ObservableObject {
         }
         saveDebounceWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
+    }
+
+    func clickHabit(_ habit: HabitItem) {
+        onHabitClicked?(habit.id)
+    }
+
+    func clickTask() {
+        onTaskClicked?(taskId)
     }
 
     var formattedTime: String {

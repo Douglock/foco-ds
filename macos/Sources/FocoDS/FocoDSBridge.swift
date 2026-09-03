@@ -160,6 +160,7 @@ final class FocoDSBridge {
                         let isBreak: Bool?
                         let taskId: String?
                         let taskNotes: String?
+                        let habits: [HabitItem]?
                         let forceFinishedAlert: Bool?
                     }
 
@@ -168,7 +169,7 @@ final class FocoDSBridge {
                     DispatchQueue.main.async { [weak self] in
                         self?.model?.update(
                             isTracking: payload.isTracking ?? false,
-                            taskTitle: payload.taskTitle ?? "Foco DS",
+                            taskTitle: payload.taskTitle ?? "",
                             timeSpentMs: payload.timeSpentMs ?? 0,
                             timeEstimateMs: payload.timeEstimateMs ?? 0,
                             remainingSeconds: payload.remainingSeconds ?? 0,
@@ -176,6 +177,7 @@ final class FocoDSBridge {
                             isBreak: payload.isBreak ?? false,
                             taskId: payload.taskId,
                             taskNotes: payload.taskNotes,
+                            habits: payload.habits,
                             forceFinishedAlert: payload.forceFinishedAlert ?? false
                         )
                     }

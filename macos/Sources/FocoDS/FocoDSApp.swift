@@ -35,16 +35,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ])
         }
 
-        // 3. Setup Floating Pill Window (tight frame, NO ghost area!)
+        // 3. Setup Task Click Handler (opens and focuses task in Super Productivity)
+        model.onTaskClicked = { [weak b] taskId in
+            if let id = taskId, !id.isEmpty {
+                b?.queueCommand([
+                    "type": "focus_task",
+                    "taskId": id
+                ])
+            }
+        }
+
+        // 4. Setup Habit Click Handler (increments habit counter in Super Productivity)
+        model.onHabitClicked = { [weak b] habitId in
+            b?.queueCommand([
+                "type": "increment_habit",
+                "habitId": habitId
+            ])
+        }
+
+        // 5. Setup Floating Pill Window
         setupFloatingPill()
 
-        // 4. Setup Floating Notes Panel Controller
+        // 6. Setup Floating Notes Panel Controller
         notesController = NotesPanelController(model: model, pillWindow: window)
         model.onToggleNotesPanel = { [weak self] in
             self?.notesController?.toggle()
         }
 
-        // 5. Setup Menu Bar Status Item
+        // 7. Setup Menu Bar Status Item
         setupStatusItem()
     }
 
@@ -64,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false // Zero black shadow!
+        panel.hasShadow = false
         panel.isMovableByWindowBackground = false
 
         let hostingView = NSHostingView(rootView: FocoDSPillView(model: model))

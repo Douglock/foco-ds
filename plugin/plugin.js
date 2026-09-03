@@ -68,6 +68,9 @@ let lastPayloadString = "";
 let previousIsBreak = false;
 let previousRemaining = 0;
 let isSyncing = false;
+let wasTracking = false;
+let previousTrackedTaskId = null;
+const alertedOvertimeMap = new Set();
 
 async function syncState() {
   if (isSyncing) return;
@@ -189,7 +192,13 @@ async function syncState() {
 
     const isTracking = Boolean(activeTask && (state.running || appState?.timeTracking?.isTracking || activeTask.isCurrent));
 
-    // Detect focus completion
+    // Detect PLAY (Transition from not tracking to tracking, or switching to another task while tracking)
+    let triggerPlayFlash = false;
+    if (isTracking && (!wasTracking || (activeTask && String(activeTask.id) !== previousTrackedTaskId))) {
+      triggerPlayFlash = true;
+    }
+
+    // Detect focus completion / break
     let forceFinishedAlert = false;
     if (!previousIsBreak && isBreak) {
       forceFinishedAlert = true;
@@ -198,13 +207,28 @@ async function syncState() {
       forceFinishedAlert = true;
     }
 
+    // Detect Estimate Exceeded / Finished
+    let triggerOvertimeFlash = false;
+    const timeSpentMs = activeTask?.timeSpent || 0;
+    const timeEstimateMs = activeTask?.timeEstimate || 0;
+
+    if (isTracking && timeEstimateMs > 0 && timeSpentMs >= timeEstimateMs) {
+      const overtimeKey = `${activeTask.id}_${timeEstimateMs}`;
+      if (!alertedOvertimeMap.has(overtimeKey)) {
+        alertedOvertimeMap.add(overtimeKey);
+        triggerOvertimeFlash = true;
+      }
+    } else if (!isTracking) {
+      alertedOvertimeMap.clear();
+    }
+
+    wasTracking = isTracking;
+    previousTrackedTaskId = isTracking && activeTask ? String(activeTask.id) : null;
     previousIsBreak = isBreak;
     previousRemaining = remainingSeconds;
 
     // Prepare payload
     const title = isTracking && activeTask?.title ? String(activeTask.title) : "";
-    const timeSpentMs = activeTask?.timeSpent || 0;
-    const timeEstimateMs = activeTask?.timeEstimate || 0;
     const taskId = isTracking && activeTask?.id ? String(activeTask.id) : null;
     const taskNotes = String(activeTask?.notes || "");
 
@@ -219,11 +243,13 @@ async function syncState() {
       taskId,
       taskNotes,
       habits: mappedHabits,
+      triggerPlayFlash,
+      triggerOvertimeFlash,
       forceFinishedAlert
     };
 
     const payloadString = JSON.stringify(payload);
-    if (payloadString !== lastPayloadString || forceFinishedAlert) {
+    if (payloadString !== lastPayloadString || triggerPlayFlash || triggerOvertimeFlash || forceFinishedAlert) {
       lastPayloadString = payloadString;
       await fetch(`${FOCO_DS_BRIDGE_URL}/state`, {
         method: "POST",
@@ -252,6 +278,16 @@ async function syncState() {
             } else if (cmd.type === "update_notes" && cmd.taskId) {
               if (typeof PluginAPI.updateTask === "function") {
                 await PluginAPI.updateTask(cmd.taskId, { notes: String(cmd.notes || "") });
+              }
+            } else if (cmd.type === "update_task_estimate" && cmd.taskId) {
+              const newEst = Number(cmd.timeEstimateMs || 0);
+              if (typeof PluginAPI.updateTask === "function") {
+                await PluginAPI.updateTask(cmd.taskId, { timeEstimate: newEst });
+              } else if (typeof PluginAPI.dispatchAction === "function") {
+                PluginAPI.dispatchAction({
+                  type: "[Task] UpdateTask",
+                  task: { id: cmd.taskId, changes: { timeEstimate: newEst } }
+                });
               }
             } else if (cmd.type === "increment_habit" && cmd.habitId) {
               if (typeof PluginAPI.incrementCounter === "function") {

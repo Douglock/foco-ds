@@ -149,12 +149,21 @@ final class FocoDSBridge {
             return
         }
 
-        // Test Alert / Screen Flash & Sound endpoint
+        // Test Play Flash (Green) endpoint
+        if (method == "POST" || method == "GET") && path.starts(with: "/play-flash") {
+            DispatchQueue.main.async {
+                ScreenFlashController.triggerPlayFlash()
+            }
+            sendResponse(connection: connection, status: "200 OK", body: "{\"ok\": true, \"flash\": \"green\"}")
+            return
+        }
+
+        // Test Alert / Screen Flash (Red) & Sound endpoint
         if (method == "POST" || method == "GET") && (path.starts(with: "/test-alert") || path.starts(with: "/finish")) {
             DispatchQueue.main.async { [weak self] in
-                self?.model?.triggerFinishedAlert()
+                self?.model?.triggerOvertimeAlert()
             }
-            sendResponse(connection: connection, status: "200 OK", body: "{\"ok\": true, \"alert\": \"triggered\"}")
+            sendResponse(connection: connection, status: "200 OK", body: "{\"ok\": true, \"alert\": \"red\"}")
             return
         }
 
@@ -174,6 +183,8 @@ final class FocoDSBridge {
                         let taskId: String?
                         let taskNotes: String?
                         let habits: [HabitItem]?
+                        let triggerPlayFlash: Bool?
+                        let triggerOvertimeFlash: Bool?
                         let forceFinishedAlert: Bool?
                     }
 
@@ -191,6 +202,8 @@ final class FocoDSBridge {
                             taskId: payload.taskId,
                             taskNotes: payload.taskNotes,
                             habits: payload.habits,
+                            triggerPlayFlash: payload.triggerPlayFlash ?? false,
+                            triggerOvertimeFlash: payload.triggerOvertimeFlash ?? false,
                             forceFinishedAlert: payload.forceFinishedAlert ?? false
                         )
                     }

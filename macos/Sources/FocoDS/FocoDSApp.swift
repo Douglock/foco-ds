@@ -53,7 +53,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ])
         }
 
-        // 5. Setup Floating Pill Window
+        // 5. Setup Estimate Updating
+        model.onUpdateEstimate = { [weak b] taskId, estimateMs in
+            b?.queueCommand([
+                "type": "update_task_estimate",
+                "taskId": taskId,
+                "timeEstimateMs": estimateMs
+            ])
+        }
+
+        // 6. Setup Floating Pill Window
         setupFloatingPill()
 
         // 6. Setup Floating Notes Panel Controller
@@ -112,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem(title: "Abrir Super Productivity", action: #selector(openSuperProductivity), keyEquivalent: "o"))
         menu.addItem(NSMenuItem(title: "Abrir/Fechar Nota Flutuante", action: #selector(toggleNotes), keyEquivalent: "n"))
-        menu.addItem(NSMenuItem(title: "Testar Alerta (Som + Piscar Tela)", action: #selector(testAlert), keyEquivalent: "t"))
+        menu.addItem(NSMenuItem(title: "Testar Flash Play (Verde)", action: #selector(testPlayFlash), keyEquivalent: "p"))
+        menu.addItem(NSMenuItem(title: "Testar Alerta/Estimativa (Vermelho)", action: #selector(testAlert), keyEquivalent: "t"))
         menu.addItem(NSMenuItem(title: "Centralizar no Topo", action: #selector(recenterPanel), keyEquivalent: "c"))
         menu.addItem(NSMenuItem.separator())
 
@@ -129,8 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notesController?.toggle()
     }
 
+    @objc private func testPlayFlash() {
+        ScreenFlashController.triggerPlayFlash()
+    }
+
     @objc private func testAlert() {
-        model.triggerFinishedAlert()
+        model.triggerOvertimeAlert()
     }
 
     @objc private func recenterPanel() {

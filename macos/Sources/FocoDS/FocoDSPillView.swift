@@ -27,10 +27,7 @@ struct FocoDSPillView: View {
                         Capsule()
                             .fill(
                                 LinearGradient(
-                                    colors: [
-                                        Color(red: 16/255, green: 185/255, blue: 129/255).opacity(0.32),
-                                        Color(red: 5/255, green: 150/255, blue: 105/255).opacity(0.14)
-                                    ],
+                                    colors: progressGradientColors,
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -38,24 +35,12 @@ struct FocoDSPillView: View {
                             .frame(width: max(0, geo.size.width * CGFloat(model.progress)))
                             .animation(.easeInOut(duration: 0.3), value: model.progress)
                     }
-
-                    // Linha de Progresso Fina na Base
-                    VStack {
-                        Spacer()
-                        GeometryReader { geo in
-                            Capsule()
-                                .fill(Color(red: 16/255, green: 185/255, blue: 129/255))
-                                .frame(width: max(0, geo.size.width * CGFloat(model.progress)), height: 2)
-                                .animation(.easeInOut(duration: 0.3), value: model.progress)
-                        }
-                        .frame(height: 2)
-                    }
                 }
             }
             .clipShape(Capsule())
         )
         .overlay(
-            // Crisp 1px border stroke (pisca se finalizou foco)
+            // Crisp 1px border stroke (pisca se finalizou foco ou alerta)
             Capsule()
                 .stroke(borderStrokeColor, lineWidth: model.isPillFlashing ? 2.0 : 1.0)
         )
@@ -101,6 +86,26 @@ struct FocoDSPillView: View {
                     SuperProductivityLauncher.activateSuperProductivity()
                 })
             )
+            .contextMenu {
+                Button("Abrir no Super Productivity") {
+                    model.clickTask()
+                    SuperProductivityLauncher.activateSuperProductivity()
+                }
+                Divider()
+                Menu("Definir Estimativa") {
+                    Button("15 minutos") { model.setTaskEstimate(minutes: 15) }
+                    Button("25 minutos") { model.setTaskEstimate(minutes: 25) }
+                    Button("30 minutos") { model.setTaskEstimate(minutes: 30) }
+                    Button("45 minutos") { model.setTaskEstimate(minutes: 45) }
+                    Button("60 minutos (1h)") { model.setTaskEstimate(minutes: 60) }
+                    Divider()
+                    Button("Sem estimativa") { model.setTaskEstimate(minutes: 0) }
+                }
+                Divider()
+                Button("Anotações da Tarefa") {
+                    model.toggleSideNotes()
+                }
+            }
 
             // Minimalist Note Button (Isolated from drag handler)
             Button(action: {
@@ -155,7 +160,7 @@ struct FocoDSPillView: View {
         ZStack {
             if model.isTracking && !model.isBreak {
                 Circle()
-                    .fill(Color(red: 16/255, green: 185/255, blue: 129/255).opacity(0.35))
+                    .fill(statusColor.opacity(0.35))
                     .frame(width: 14, height: 14)
             }
 
@@ -170,15 +175,43 @@ struct FocoDSPillView: View {
             return "Em Pausa"
         }
         if model.isTracking {
+            if model.hasEstimate {
+                if model.isOvertime {
+                    let overtimeSec = max(0, Int((model.timeSpentMs - model.timeEstimateMs) / 1000))
+                    let m = overtimeSec / 60
+                    let s = overtimeSec % 60
+                    let overtimeStr = m > 0 ? "+\(m)m" : "+\(s)s"
+                    return "Tempo Excedido • \(overtimeStr)"
+                } else {
+                    let pct = Int(model.progress * 100)
+                    return "Estimativa • \(pct)% restante"
+                }
+            }
             let pct = Int(model.progress * 100)
             return "Foco Ativo • \(pct)%"
         }
         return "Hábitos"
     }
 
+    private var progressGradientColors: [Color] {
+        if model.isOvertime {
+            return [
+                Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.35),
+                Color(red: 220/255, green: 38/255, blue: 38/255).opacity(0.18)
+            ]
+        }
+        return [
+            Color(red: 16/255, green: 185/255, blue: 129/255).opacity(0.32),
+            Color(red: 5/255, green: 150/255, blue: 105/255).opacity(0.14)
+        ]
+    }
+
     private var statusColor: Color {
         if model.isBreak {
             return Color(red: 34/255, green: 211/255, blue: 238/255) // Cyan
+        }
+        if model.isOvertime {
+            return Color(red: 239/255, green: 68/255, blue: 68/255) // Red/Coral
         }
         if model.isTracking {
             return Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald
@@ -190,6 +223,9 @@ struct FocoDSPillView: View {
         if model.isBreak {
             return Color(red: 34/255, green: 211/255, blue: 238/255)
         }
+        if model.isOvertime {
+            return Color(red: 248/255, green: 113/255, blue: 113/255) // Red/Coral
+        }
         if model.isTracking {
             return Color(red: 52/255, green: 211/255, blue: 153/255)
         }
@@ -200,6 +236,9 @@ struct FocoDSPillView: View {
         if model.isPillFlashing {
             return Color(red: 251/255, green: 191/255, blue: 36/255)
         }
+        if model.isOvertime {
+            return Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.45)
+        }
         if isHovering {
             return Color(red: 16/255, green: 185/255, blue: 129/255).opacity(0.55)
         }
@@ -209,6 +248,7 @@ struct FocoDSPillView: View {
         return Color.white.opacity(0.14)
     }
 }
+
 
 // Single Habit Icon Button with count badge
 struct HabitButton: View {

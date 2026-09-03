@@ -8,9 +8,10 @@
 ![Status](https://img.shields.io/badge/status-ativo%20%26%20minimalista-emerald?style=for-the-badge)
 
 **HUD Minimalista Flutuante para Super Productivity no macOS.**  
-*Exibe apenas o que importa: tarefa ativa, tempo de foco e progresso. Zero botões intrusivos. Um clique para voltar ao Super Productivity.*
+*Barra de progresso, tarefa em foco em tempo real, notas minimalistas na lateral e alerta com som e flash de tela ao finalizar.*
 
 [Visão Geral](#-visão-geral) •
+[Funcionalidades](#-funcionalidades) •
 [Instalação](#-instalação-rápida) •
 [Como Funciona](#-como-funciona) •
 [Arquitetura](#-arquitetura-do-projeto) •
@@ -22,14 +23,29 @@
 
 ## 💡 Visão Geral
 
-O **Foco DS** foi projetado com uma premissa clara: **menos é mais**.
+O **Foco DS** foi projetado para quem busca foco ininterrupto com o menor atrito visual possível:
+- **100% Passivo (Read-Only)**: Todo o gerenciamento de tarefas, cronômetro e pausas continua sendo feito dentro do Super Productivity.
+- **Display Flutuante em Dark Glassmorphism**: Exibe o título da tarefa, tempo decorrido/restante e a barra de progresso.
+- **Clique Direto**: Clicar na pílula traz imediatamente o **Super Productivity para primeiro plano** focado na tarefa ativa.
+- **Arraste Livre**: Mova a pílula livremente para qualquer área da tela com aceleração nativa.
 
-Em vez de sobrecarregar o usuário com botões, controles de play/pause ou editores de tarefas na barra flutuante, o **Foco DS atua como um espelho ambiente (HUD)**:
-- **100% Passivo (Read-Only)**: Todo o gerenciamento de tarefas, cronômetro e pausas continua sendo feito no Super Productivity.
-- **Display Flutuante Discreto**: Uma pílula em *dark glassmorphism* que exibe o nome da tarefa ativa, o tempo trabalhado e o status de foco/pausa.
-- **Clique Direto**: Clicar na pílula traz imediatamente o **Super Productivity para primeiro plano** focado na tarefa.
-- **Arraste Livre**: Posicione a pílula onde quiser no monitor (ou deixe-a no topo da tela).
-- **Consumo Mínimo de Recursos**: Menos de 30 MB de RAM e 0% de CPU em repouso.
+---
+
+## ✨ Funcionalidades Principais
+
+1. 📊 **Barra de Progresso Integrada**:
+   - Preenchimento gradiente dinâmico no fundo da pílula proporcional ao tempo decorrido ou estimativa da tarefa.
+   - Linha fina e nítida na base da pílula com visualização imediata do progresso.
+2. 🎯 **Tarefa em Foco em Destaque**:
+   - Ícone com pulso de respiração quando o foco está ativo.
+   - Nome da tarefa legível em alta definição, com truncamento suave e status em tempo real.
+3. 📝 **Notas Minimalistas na Lateral (Side Notes)**:
+   - Gaveta lateral integrada acionável pelo botão `📝` ou pelo menu.
+   - Bloco de anotações sem distrações com salvamento automático local no macOS para descarregar pensamentos rápidos sem trocar de janela.
+   - Ações de copiar e limpar com um toque.
+4. 🔔 **Alerta de Finalização (Som + Flash na Tela)**:
+   - Ao término do ciclo de foco ou pomodoro, o app emite um chime sonoro suave (`Hero`/`Glass`) e dispara um flash translúcido na tela inteira (`Screen Flash`), garantindo que você perceba o fim da sessão mesmo se estiver imerso.
+   - A borda da pílula pisca em tom âmbar/dourado.
 
 ---
 
@@ -40,7 +56,7 @@ Em vez de sobrecarregar o usuário com botões, controles de play/pause ou edito
 2. Selecione o arquivo [`release/foco-ds-super-productivity.zip`](release/foco-ds-super-productivity.zip).
 
 ### 2. Abrir o App no macOS
-1. Baixe ou descompacte [`release/Foco-DS-macOS.zip`](release/Foco-DS-macOS.zip) (ou copie `Foco DS.app` para a sua pasta **Aplicativos**).
+1. O app já pode ser aberto a partir de [`release/Foco-DS-macOS.zip`](release/Foco-DS-macOS.zip) (ou copiado para a pasta **Aplicativos**).
 2. Abra o **Foco DS.app**.
 3. A pílula minimalista surgirá suavemente no topo da sua tela, conectando-se automaticamente ao Super Productivity!
 
@@ -57,8 +73,11 @@ Em vez de sobrecarregar o usuário com botões, controles de play/pause ou edito
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Foco DS (macOS SwiftUI HUD)                                │
-│  • Exibe: 🟢 Tarefa Ativa • 18:42                          │
-│  • Clique: Traz o Super Productivity para o primeiro plano │
+│  • 📊 Barra de progresso integrada                          │
+│  • 🎯 Tarefa ativa em destaque                              │
+│  • 📝 Notas minimalistas na lateral (Side Notes)            │
+│  • 🔔 Chime sonoro + Flash na tela ao finalizar o foco      │
+│  • 👆 Clique: Traz o Super Productivity para primeiro plano │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,12 +92,14 @@ foco-ds/
 │   └── Sources/FocoDS/
 │       ├── FocoDSApp.swift            # Janela flutuante transparente (.floating) e Menu Bar
 │       ├── FocoDSModel.swift          # Modelo de estado observável (@ObservableObject)
-│       ├── FocoDSPillView.swift       # Visual Glassmorphism da pílula com arraste nativo
+│       ├── FocoDSPillView.swift       # Visual Glassmorphism da pílula com barra de progresso
+│       ├── SideNotesView.swift        # Painel lateral de notas minimalistas com auto-save
+│       ├── ScreenFlashController.swift # Controlador de som e flash translúcido na tela
 │       ├── FocoDSBridge.swift         # Servidor local ultra leve (Network.framework NWListener)
 │       └── SuperProductivityLauncher.swift # Disparador para focar o Super Productivity
 ├── plugin/                            # Plugin para o Super Productivity
 │   ├── manifest.json                  # Manifesto do plugin
-│   └── plugin.js                      # Host script minimalista de envio de estado
+│   └── plugin.js                      # Host script minimalista com detecção de finalização
 ├── scripts/
 │   ├── build-macos-app.sh             # Compilação release e empacotamento .app
 │   └── package-plugin.sh              # Empacotamento do arquivo .zip do plugin

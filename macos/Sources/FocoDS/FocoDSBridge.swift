@@ -106,9 +106,17 @@ final class FocoDSBridge {
             return
         }
 
+        // Test Alert / Screen Flash & Sound endpoint
+        if (method == "POST" || method == "GET") && (path.starts(with: "/test-alert") || path.starts(with: "/finish")) {
+            DispatchQueue.main.async { [weak self] in
+                self?.model?.triggerFinishedAlert()
+            }
+            sendResponse(connection: connection, status: "200 OK", body: "{\"ok\": true, \"alert\": \"triggered\"}")
+            return
+        }
+
         // State Update
         if method == "POST" && path.starts(with: "/state") {
-            // Find body after double newline
             let bodyParts = requestString.components(separatedBy: "\r\n\r\n")
             if bodyParts.count > 1, let bodyData = bodyParts[1].data(using: .utf8) {
                 do {
@@ -117,8 +125,11 @@ final class FocoDSBridge {
                         let taskTitle: String?
                         let timeSpentMs: Int64?
                         let timeEstimateMs: Int64?
+                        let remainingSeconds: Int64?
+                        let focusDurationSeconds: Int64?
                         let isBreak: Bool?
                         let taskId: String?
+                        let forceFinishedAlert: Bool?
                     }
 
                     let payload = try JSONDecoder().decode(StatePayload.self, from: bodyData)
@@ -129,8 +140,11 @@ final class FocoDSBridge {
                             taskTitle: payload.taskTitle ?? "Foco DS",
                             timeSpentMs: payload.timeSpentMs ?? 0,
                             timeEstimateMs: payload.timeEstimateMs ?? 0,
+                            remainingSeconds: payload.remainingSeconds ?? 0,
+                            focusDurationSeconds: payload.focusDurationSeconds ?? 0,
                             isBreak: payload.isBreak ?? false,
-                            taskId: payload.taskId
+                            taskId: payload.taskId,
+                            forceFinishedAlert: payload.forceFinishedAlert ?? false
                         )
                     }
 

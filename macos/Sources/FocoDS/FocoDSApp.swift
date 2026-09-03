@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupFloatingPanel() {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 340, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 260),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.isMovableByWindowBackground = false // We handle dragging cleanly in SwiftUI
+        panel.isMovableByWindowBackground = false
 
         let hostingView = NSHostingView(rootView: FocoDSPillView(model: model))
         panel.contentView = hostingView
@@ -53,8 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Center on main screen near top (below notch / menu bar)
         if let screen = NSScreen.main {
             let screenRect = screen.visibleFrame
-            let x = screenRect.origin.x + (screenRect.width - 340) / 2
-            let y = screenRect.origin.y + screenRect.height - 52
+            let x = screenRect.origin.x + (screenRect.width - 360) / 2
+            let y = screenRect.origin.y + screenRect.height - 54
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
@@ -73,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(title: "Abrir Super Productivity", action: #selector(openSuperProductivity), keyEquivalent: "o"))
+        menu.addItem(NSMenuItem(title: "Alternar Notas Laterais", action: #selector(toggleNotes), keyEquivalent: "n"))
+        menu.addItem(NSMenuItem(title: "Testar Alerta (Som + Piscar Tela)", action: #selector(testAlert), keyEquivalent: "t"))
         menu.addItem(NSMenuItem(title: "Centralizar no Topo", action: #selector(recenterPanel), keyEquivalent: "c"))
         menu.addItem(NSMenuItem.separator())
 
@@ -85,11 +87,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SuperProductivityLauncher.activateSuperProductivity()
     }
 
+    @objc private func toggleNotes() {
+        model.toggleSideNotes()
+    }
+
+    @objc private func testAlert() {
+        model.triggerFinishedAlert()
+    }
+
     @objc private func recenterPanel() {
         guard let panel = window, let screen = NSScreen.main else { return }
         let screenRect = screen.visibleFrame
-        let x = screenRect.origin.x + (screenRect.width - panel.frame.width) / 2
-        let y = screenRect.origin.y + screenRect.height - 52
+        let x = screenRect.origin.x + (screenRect.width - 360) / 2
+        let y = screenRect.origin.y + screenRect.height - 54
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 

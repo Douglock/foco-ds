@@ -10,19 +10,38 @@ final class FocoDSModel: ObservableObject {
     @Published var taskTitle: String = "Foco DS"
     @Published var timeSpentMs: Int64 = 0
     @Published var timeEstimateMs: Int64 = 0
+    @Published var remainingSeconds: Int64 = 0
+    @Published var focusDurationSeconds: Int64 = 0
     @Published var taskId: String? = nil
     @Published var lastUpdated: Date = Date()
-    
-    // Auto increment timer when tracking is active
+
+    // Side Notes state
+    @Published var isSideNotesOpen: Bool = false
+    @Published var notesText: String = ""
+
+    // Flashing state indicator on pill
+    @Published var isPillFlashing: Bool = false
+
     private var timerCancellable: AnyCancellable?
+    private var previousIsBreak: Bool = false
+    private var previousRemaining: Int64 = 0
 
     init() {
+        // Load initial notes
+        self.notesText = UserDefaults.standard.string(forKey: "foco_ds_side_notes") ?? ""
+
         // Increment timeSpentMs every second locally when tracking to keep clock smooth
         timerCancellable = Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self, self.isTracking else { return }
                 self.timeSpentMs += 1000
+                if self.remainingSeconds > 0 {
+                    self.remainingSeconds -= 1
+                    if self.remainingSeconds == 0 {
+                        self.triggerFinishedAlert()
+                    }
+                }
             }
     }
 
@@ -31,20 +50,65 @@ final class FocoDSModel: ObservableObject {
         taskTitle: String,
         timeSpentMs: Int64,
         timeEstimateMs: Int64 = 0,
+        remainingSeconds: Int64 = 0,
+        focusDurationSeconds: Int64 = 0,
         isBreak: Bool = false,
-        taskId: String? = nil
+        taskId: String? = nil,
+        forceFinishedAlert: Bool = false
     ) {
+        let cleanTitle = taskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         self.isConnected = true
         self.isTracking = isTracking
-        self.taskTitle = taskTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Foco DS" : taskTitle
+        self.taskTitle = cleanTitle.isEmpty ? "Foco DS" : cleanTitle
         self.timeSpentMs = max(0, timeSpentMs)
         self.timeEstimateMs = max(0, timeEstimateMs)
+        self.remainingSeconds = max(0, remainingSeconds)
+        if focusDurationSeconds > 0 {
+            self.focusDurationSeconds = focusDurationSeconds
+        }
         self.isBreak = isBreak
         self.taskId = taskId
         self.lastUpdated = Date()
+
+        // Detect transition from Focus -> Break or explicit finished alert
+        if forceFinishedAlert || (!previousIsBreak && isBreak) || (previousRemaining > 0 && remainingSeconds == 0 && isTracking) {
+            triggerFinishedAlert()
+        }
+
+        self.previousIsBreak = isBreak
+        self.previousRemaining = remainingSeconds
+    }
+
+    func triggerFinishedAlert() {
+        ScreenFlashController.triggerFocusFinishedAlert()
+
+        // Flash pill border
+        withAnimation(.easeInOut(duration: 0.15).repeatCount(4, autoreverses: true)) {
+            self.isPillFlashing = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            self.isPillFlashing = false
+        }
+    }
+
+    func toggleSideNotes() {
+        isSideNotesOpen.toggle()
+    }
+
+    func updateNotes(_ newText: String) {
+        self.notesText = newText
+        UserDefaults.standard.set(newText, forKey: "foco_ds_side_notes")
     }
 
     var formattedTime: String {
+        // If countdown remaining time is provided, show remaining time
+        if remainingSeconds > 0 {
+            let m = remainingSeconds / 60
+            let s = remainingSeconds % 60
+            return String(format: "%02d:%02d", m, s)
+        }
+
+        // Otherwise show elapsed time
         let totalSeconds = Int(timeSpentMs / 1000)
         let hours = totalSeconds / 3600
         let minutes = (totalSeconds % 3600) / 60
@@ -58,7 +122,17 @@ final class FocoDSModel: ObservableObject {
     }
 
     var progress: Double {
-        guard timeEstimateMs > 0 else { return 0.0 }
-        return min(1.0, max(0.0, Double(timeSpentMs) / Double(timeEstimateMs)))
+        // 1. If estimate exists
+        if timeEstimateMs > 0 {
+            return min(1.0, max(0.0, Double(timeSpentMs) / Double(timeEstimateMs)))
+        }
+        // 2. If countdown duration exists
+        if focusDurationSeconds > 0 && remainingSeconds >= 0 {
+            return min(1.0, max(0.0, 1.0 - (Double(remainingSeconds) / Double(focusDurationSeconds))))
+        }
+        // 3. Fallback: default 25 min cycle progression
+        let defaultCycleMs: Double = 25 * 60 * 1000
+        let cycleProgress = Double(timeSpentMs % Int64(defaultCycleMs)) / defaultCycleMs
+        return isTracking ? cycleProgress : 0.0
     }
 }

@@ -1,0 +1,11 @@
+{
+  "id": "foco-ds",
+  "name": "Foco DS",
+  "version": "1.0.0",
+  "description": "HUD minimalista para exibir a tarefa ativa e o tempo de foco diretamente na pílula flutuante do macOS.",
+  "author": "Douglas Santana",
+  "entry": "plugin.js",
+  "permissions": [
+    "http"
+  ]
+}

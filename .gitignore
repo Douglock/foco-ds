@@ -92,5 +92,6 @@ Icon
 dist/
 build/
 out/
-release/
 .build/
+release/Foco DS.app/
+!release/*.zip

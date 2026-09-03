@@ -5,16 +5,15 @@
 ![GitHub repo size](https://img.shields.io/github/repo-size/Douglock/foco-ds?style=for-the-badge&color=10b981)
 ![GitHub stars](https://img.shields.io/github/stars/Douglock/foco-ds?style=for-the-badge&color=eab308)
 ![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
-![Status](https://img.shields.io/badge/status-ativo%20%26%20funcional-emerald?style=for-the-badge)
+![Status](https://img.shields.io/badge/status-ativo%20%26%20minimalista-emerald?style=for-the-badge)
 
-**Aplicativo para gestão de tempo, hiperfoco e alta performance pessoal.**  
-*Transformando disciplina em rotina através de ciclos adaptativos de trabalho profundo e sons ambientes nativos.*
+**HUD Minimalista Flutuante para Super Productivity no macOS.**  
+*Exibe apenas o que importa: tarefa ativa, tempo de foco e progresso. Zero botões intrusivos. Um clique para voltar ao Super Productivity.*
 
 [Visão Geral](#-visão-geral) •
-[Funcionalidades](#-funcionalidades) •
+[Instalação](#-instalação-rápida) •
+[Como Funciona](#-como-funciona) •
 [Arquitetura](#-arquitetura-do-projeto) •
-[Atalhos](#-atalhos-de-teclado) •
-[Como Começar](#-como-começar) •
 [Autor](#-autor)
 
 </div>
@@ -23,45 +22,45 @@
 
 ## 💡 Visão Geral
 
-O **Foco DS** é uma aplicação completa concebida para desenvolvedores, criadores e profissionais que precisam proteger sua atenção e maximizar a produtividade diária.
+O **Foco DS** foi projetado com uma premissa clara: **menos é mais**.
 
-Construído com padrões modernos da web (ES Modules, Web Audio API pura, sem dependências externas pesadas), o app une estética refinada em **dark glassmorphism**, áudio sintetizado para indução de foco e anotações anti-distração.
-
----
-
-## ✨ Funcionalidades
-
-- ⏱️ **Ciclos Adaptativos de Concentração**:
-  - **Pomodoro Clássico**: 25 min foco + 5 min pausa.
-  - **Deep Work Intenso**: 50 min foco + 10 min pausa.
-  - **Ciclo Ultradiano**: 90 min foco + 15 min pausa profunda.
-  - **Duração Personalizada**: Ajuste flexível de 1 a 120 minutos.
-- 🎯 **Ancoragem de Intenção Única**:
-  - Campo no topo para definir seu único foco da sessão, mantendo a mente orientada a resultados.
-- 🎧 **Sons Ambientes Nativos (Web Audio API)**:
-  - *Deep Brown Noise*: Ruído marrom profundo para abafar ruídos externos e induzir calma.
-  - *Chuva Suave (Pink Noise)*: Ruído suave com corte de frequências para relaxamento ativo.
-  - *Frequências Binaurais Alfa (10Hz)*: Estimulação por diferença de fase estéreo para foco mental.
-  - *Sino Zen*: Chime suave ao término de cada bloco.
-- 📝 **Anotações de Alívio Mental (Anti-Distração)**:
-  - Bloco de notas rápido acessível pelo teclado (`N`) para descarregar pensamentos passageiros sem quebrar a linha de raciocínio.
-- 📊 **Tracking Diário & Streaks**:
-  - Métricas salvas localmente: streak de dias consecutivos, minutos focados hoje, total de sessões e gráfico dos últimos 7 dias.
-- ⚡ **Alta Precisão Temporal**:
-  - Motor de contagem corrigido por timestamp (`Date.now()`), garantindo que o cronômetro não congele ou atrase ao alternar abas no navegador.
-- 🖥️ **Modo Tela Cheia & Design Responsivo**:
-  - Interface fluida adaptada para desktops, tablets e smartphones.
+Em vez de sobrecarregar o usuário com botões, controles de play/pause ou editores de tarefas na barra flutuante, o **Foco DS atua como um espelho ambiente (HUD)**:
+- **100% Passivo (Read-Only)**: Todo o gerenciamento de tarefas, cronômetro e pausas continua sendo feito no Super Productivity.
+- **Display Flutuante Discreto**: Uma pílula em *dark glassmorphism* que exibe o nome da tarefa ativa, o tempo trabalhado e o status de foco/pausa.
+- **Clique Direto**: Clicar na pílula traz imediatamente o **Super Productivity para primeiro plano** focado na tarefa.
+- **Arraste Livre**: Posicione a pílula onde quiser no monitor (ou deixe-a no topo da tela).
+- **Consumo Mínimo de Recursos**: Menos de 30 MB de RAM e 0% de CPU em repouso.
 
 ---
 
-## ⌨️ Atalhos de Teclado
+## ⚡ Instalação Rápida
 
-| Tecla | Ação |
-| :---: | :--- |
-| <kbd>Espaço</kbd> | Iniciar ou Pausar a sessão atual |
-| <kbd>R</kbd> | Reiniciar o cronômetro |
-| <kbd>N</kbd> | Abrir/Fechar Anotações de Alívio Mental |
-| <kbd>M</kbd> | Abrir seletor de Sons Ambientes |
+### 1. Instalar o Plugin no Super Productivity
+1. No Super Productivity, acesse **Configurações → Plugins → Escolher arquivo de plugin**.
+2. Selecione o arquivo [`release/foco-ds-super-productivity.zip`](release/foco-ds-super-productivity.zip).
+
+### 2. Abrir o App no macOS
+1. Baixe ou descompacte [`release/Foco-DS-macOS.zip`](release/Foco-DS-macOS.zip) (ou copie `Foco DS.app` para a sua pasta **Aplicativos**).
+2. Abra o **Foco DS.app**.
+3. A pílula minimalista surgirá suavemente no topo da sua tela, conectando-se automaticamente ao Super Productivity!
+
+---
+
+## 🔍 Como Funciona
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Super Productivity                                         │
+│  (Você gerencia tarefas, pomodoros e projetos aqui)         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ POST /state (127.0.0.1:28475)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Foco DS (macOS SwiftUI HUD)                                │
+│  • Exibe: 🟢 Tarefa Ativa • 18:42                          │
+│  • Clique: Traz o Super Productivity para o primeiro plano │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -69,42 +68,27 @@ Construído com padrões modernos da web (ES Modules, Web Audio API pura, sem de
 
 ```text
 foco-ds/
-├── modules/
-│   ├── audio.js         # Sintetizador puro Web Audio API (ruídos e chimes)
-│   ├── storage.js       # Gerenciador de persistência (LocalStorage, streaks e notas)
-│   └── timer.js         # Motor de temporização de alta precisão com drift-correction
-├── styles/
-│   └── main.css         # Design system com Glassmorphism, animações e paleta dark
-├── index.html           # Interface semântica e acessível
-├── main.js              # Controlador principal da aplicação
-├── .gitignore           # Regras de exclusão do Git
-├── LICENSE              # Licença MIT
-├── package.json         # Manifesto do projeto
-└── README.md            # Documentação técnica oficial
+├── macos/                             # App nativo Swift para macOS (SwiftUI + AppKit)
+│   ├── Package.swift                  # Manifesto do Swift Package Manager
+│   └── Sources/FocoDS/
+│       ├── FocoDSApp.swift            # Janela flutuante transparente (.floating) e Menu Bar
+│       ├── FocoDSModel.swift          # Modelo de estado observável (@ObservableObject)
+│       ├── FocoDSPillView.swift       # Visual Glassmorphism da pílula com arraste nativo
+│       ├── FocoDSBridge.swift         # Servidor local ultra leve (Network.framework NWListener)
+│       └── SuperProductivityLauncher.swift # Disparador para focar o Super Productivity
+├── plugin/                            # Plugin para o Super Productivity
+│   ├── manifest.json                  # Manifesto do plugin
+│   └── plugin.js                      # Host script minimalista de envio de estado
+├── scripts/
+│   ├── build-macos-app.sh             # Compilação release e empacotamento .app
+│   └── package-plugin.sh              # Empacotamento do arquivo .zip do plugin
+├── release/                           # Artefatos prontos para uso
+│   ├── Foco DS.app                    # Aplicativo macOS compilado
+│   ├── Foco-DS-macOS.zip              # ZIP do app macOS
+│   └── foco-ds-super-productivity.zip # ZIP do plugin Super Productivity
+├── LICENSE                            # Licença MIT
+└── README.md                          # Documentação oficial
 ```
-
----
-
-## 🚀 Como Começar
-
-### Executando Localmente
-
-1. Clone o repositório:
-```bash
-git clone https://github.com/Douglock/foco-ds.git
-cd foco-ds
-```
-
-2. Abra o arquivo `index.html` diretamente em seu navegador, ou inicie um servidor estático local:
-```bash
-# Com Python 3
-python3 -m http.server 3000
-
-# Ou com Node.js
-npx serve .
-```
-
-3. Acesse `http://localhost:3000` e aproveite suas sessões de foco!
 
 ---
 
@@ -118,4 +102,4 @@ Desenvolvido por **Douglas Santana** ([@Douglock](https://github.com/Douglock)).
 
 ## 📄 Licença
 
-Este projeto está sob a licença [MIT](LICENSE).
+Este projeto é software livre sob a licença [MIT](LICENSE).

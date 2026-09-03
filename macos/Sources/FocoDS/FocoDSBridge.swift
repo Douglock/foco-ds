@@ -6,8 +6,26 @@ final class FocoDSBridge {
     private var listener: NWListener?
     private weak var model: FocoDSModel?
 
+    // Thread-safe command queue for bidirectional sync with Super Productivity
+    private let commandQueue = DispatchQueue(label: "com.focods.commands")
+    private var pendingCommands: [[String: Any]] = []
+
     init(model: FocoDSModel) {
         self.model = model
+    }
+
+    func queueCommand(_ command: [String: Any]) {
+        commandQueue.async {
+            self.pendingCommands.append(command)
+        }
+    }
+
+    private func popAllCommands() -> [[String: Any]] {
+        return commandQueue.sync {
+            let cmds = self.pendingCommands
+            self.pendingCommands.removeAll()
+            return cmds
+        }
     }
 
     func start() {
@@ -106,6 +124,18 @@ final class FocoDSBridge {
             return
         }
 
+        // Commands polling by Super Productivity plugin
+        if method == "GET" && path.starts(with: "/commands") {
+            let cmds = popAllCommands()
+            if let data = try? JSONSerialization.data(withJSONObject: cmds, options: []),
+               let jsonString = String(data: data, encoding: .utf8) {
+                sendResponse(connection: connection, status: "200 OK", body: jsonString)
+            } else {
+                sendResponse(connection: connection, status: "200 OK", body: "[]")
+            }
+            return
+        }
+
         // Test Alert / Screen Flash & Sound endpoint
         if (method == "POST" || method == "GET") && (path.starts(with: "/test-alert") || path.starts(with: "/finish")) {
             DispatchQueue.main.async { [weak self] in
@@ -115,7 +145,7 @@ final class FocoDSBridge {
             return
         }
 
-        // State Update
+        // State Update from Super Productivity
         if method == "POST" && path.starts(with: "/state") {
             let bodyParts = requestString.components(separatedBy: "\r\n\r\n")
             if bodyParts.count > 1, let bodyData = bodyParts[1].data(using: .utf8) {
@@ -129,6 +159,7 @@ final class FocoDSBridge {
                         let focusDurationSeconds: Int64?
                         let isBreak: Bool?
                         let taskId: String?
+                        let taskNotes: String?
                         let forceFinishedAlert: Bool?
                     }
 
@@ -144,6 +175,7 @@ final class FocoDSBridge {
                             focusDurationSeconds: payload.focusDurationSeconds ?? 0,
                             isBreak: payload.isBreak ?? false,
                             taskId: payload.taskId,
+                            taskNotes: payload.taskNotes,
                             forceFinishedAlert: payload.forceFinishedAlert ?? false
                         )
                     }

@@ -15,25 +15,45 @@ struct FocoDSApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSPanel?
+    var notesController: NotesPanelController?
     var statusItem: NSStatusItem?
     let model = FocoDSModel()
     var bridge: FocoDSBridge?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Start local bridge server
-        bridge = FocoDSBridge(model: model)
-        bridge?.start()
+        // 1. Setup local bridge server
+        let b = FocoDSBridge(model: model)
+        self.bridge = b
+        b.start()
 
-        // Setup Floating Window
-        setupFloatingPanel()
+        // 2. Setup bidirectional notes saving
+        model.onNotesSaved = { [weak b] taskId, notes in
+            b?.queueCommand([
+                "type": "update_notes",
+                "taskId": taskId,
+                "notes": notes
+            ])
+        }
 
-        // Setup Menu Bar Status Item
+        // 3. Setup Floating Pill Window (tight frame, NO ghost area!)
+        setupFloatingPill()
+
+        // 4. Setup Floating Notes Panel Controller
+        notesController = NotesPanelController(model: model, pillWindow: window)
+        model.onToggleNotesPanel = { [weak self] in
+            self?.notesController?.toggle()
+        }
+
+        // 5. Setup Menu Bar Status Item
         setupStatusItem()
     }
 
-    private func setupFloatingPanel() {
+    private func setupFloatingPill() {
+        let pillWidth: CGFloat = 330
+        let pillHeight: CGFloat = 38
+
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: pillWidth, height: pillHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -44,17 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = false // Zero black shadow!
         panel.isMovableByWindowBackground = false
 
         let hostingView = NSHostingView(rootView: FocoDSPillView(model: model))
         panel.contentView = hostingView
 
-        // Center on main screen near top (below notch / menu bar)
+        // Center on main screen near top (right under notch / menu bar)
         if let screen = NSScreen.main {
             let screenRect = screen.visibleFrame
-            let x = screenRect.origin.x + (screenRect.width - 360) / 2
-            let y = screenRect.origin.y + screenRect.height - 54
+            let x = screenRect.origin.x + (screenRect.width - pillWidth) / 2
+            let y = screenRect.origin.y + screenRect.height - pillHeight - 6
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
@@ -73,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(title: "Abrir Super Productivity", action: #selector(openSuperProductivity), keyEquivalent: "o"))
-        menu.addItem(NSMenuItem(title: "Alternar Notas Laterais", action: #selector(toggleNotes), keyEquivalent: "n"))
+        menu.addItem(NSMenuItem(title: "Abrir/Fechar Nota Flutuante", action: #selector(toggleNotes), keyEquivalent: "n"))
         menu.addItem(NSMenuItem(title: "Testar Alerta (Som + Piscar Tela)", action: #selector(testAlert), keyEquivalent: "t"))
         menu.addItem(NSMenuItem(title: "Centralizar no Topo", action: #selector(recenterPanel), keyEquivalent: "c"))
         menu.addItem(NSMenuItem.separator())
@@ -88,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleNotes() {
-        model.toggleSideNotes()
+        notesController?.toggle()
     }
 
     @objc private func testAlert() {
@@ -98,8 +118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func recenterPanel() {
         guard let panel = window, let screen = NSScreen.main else { return }
         let screenRect = screen.visibleFrame
-        let x = screenRect.origin.x + (screenRect.width - 360) / 2
-        let y = screenRect.origin.y + screenRect.height - 54
+        let x = screenRect.origin.x + (screenRect.width - panel.frame.width) / 2
+        let y = screenRect.origin.y + screenRect.height - panel.frame.height - 6
         panel.setFrameOrigin(NSPoint(x: x, y: y))
     }
 

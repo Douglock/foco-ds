@@ -1,0 +1,214 @@
+:root {
+  --bg: #090d16;
+  --card-bg: rgba(18, 24, 38, 0.75);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --primary: #10b981;
+  --primary-glow: rgba(16, 185, 129, 0.25);
+  --primary-hover: #059669;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --surface: #1f2937;
+  --surface-hover: #374151;
+  --radius-lg: 24px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.1) 0px, transparent 50%);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.logo-text strong {
+  color: var(--primary);
+}
+
+.header-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--primary);
+  border-radius: 9999px;
+}
+
+.focus-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  padding: 36px 28px;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-tag {
+  font-size: 0.8rem;
+  color: var(--primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.session-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.timer-display-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
+  border: 2px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 30px var(--primary-glow);
+}
+
+.timer-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 3.2rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.controls-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #042f1f;
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text-main);
+  border: 1px solid var(--card-border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-hover);
+}
+
+.quick-modes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.mode-chip {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mode-chip:hover {
+  color: var(--text-main);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.mode-chip.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.app-footer {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.app-footer a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}

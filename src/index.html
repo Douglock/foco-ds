@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foco DS - Alta Performance & Deep Work</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <span class="logo-icon">🎯</span>
+        <span class="logo-text">Foco <strong>DS</strong></span>
+      </div>
+      <div class="header-badge">Deep Work Engine</div>
+    </header>
+
+    <main class="focus-card">
+      <div class="session-info">
+        <span class="session-tag" id="sessionTag">Sessão de Foco</span>
+        <h1 class="session-title" id="sessionTitle">Concentração Profunda</h1>
+      </div>
+
+      <div class="timer-display-wrap">
+        <div class="timer-circle-progress" id="timerProgress"></div>
+        <div class="timer-number" id="timerDisplay">25:00</div>
+      </div>
+
+      <div class="controls-row">
+        <button class="btn btn-primary" id="btnToggle">Iniciar Foco</button>
+        <button class="btn btn-secondary" id="btnReset">Reiniciar</button>
+      </div>
+
+      <div class="quick-modes">
+        <button class="mode-chip active" data-time="25">25 min (Pomodoro)</button>
+        <button class="mode-chip" data-time="50">50 min (Deep Work)</button>
+        <button class="mode-chip" data-time="5">5 min (Pausa Curta)</button>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <p>Desenvolvido por <a href="https://github.com/Douglock" target="_blank" rel="noreferrer">Douglas Santana</a></p>
+    </footer>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

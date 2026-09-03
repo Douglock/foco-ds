@@ -1,0 +1,21 @@
+{
+  "name": "foco-ds",
+  "version": "0.1.0",
+  "description": "Aplicativo para gestão de tempo, hiperfoco e alta performance pessoal.",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve src",
+    "start": "npx serve src"
+  },
+  "keywords": [
+    "productivity",
+    "focus",
+    "deep-work",
+    "pomodoro",
+    "time-management",
+    "foco"
+  ],
+  "author": "Douglas Santana <https://github.com/Douglock>",
+  "license": "MIT"
+}

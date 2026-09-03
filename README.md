@@ -69,21 +69,18 @@ Construído com padrões modernos da web (ES Modules, Web Audio API pura, sem de
 
 ```text
 foco-ds/
-├── src/
-│   ├── modules/
-│   │   ├── audio.js         # Sintetizador puro Web Audio API (ruídos e chimes)
-│   │   ├── storage.js       # Gerenciador de persistência (LocalStorage, streaks e notas)
-│   │   └── timer.js         # Motor de temporização de alta precisão com drift-correction
-│   ├── styles/
-│   │   └── main.css         # Design system com Glassmorphism, animações e paleta dark
-│   ├── index.html           # Interface semântica e acessível
-│   └── main.js              # Controlador principal da aplicação
-├── .github/
-│   └── workflows/
-│       └── deploy.yml       # Deploy automatizado no GitHub Pages
-├── .gitignore               # Regras de exclusão do Git
-├── LICENSE                  # Licença MIT
-└── README.md                # Documentação técnica oficial
+├── modules/
+│   ├── audio.js         # Sintetizador puro Web Audio API (ruídos e chimes)
+│   ├── storage.js       # Gerenciador de persistência (LocalStorage, streaks e notas)
+│   └── timer.js         # Motor de temporização de alta precisão com drift-correction
+├── styles/
+│   └── main.css         # Design system com Glassmorphism, animações e paleta dark
+├── index.html           # Interface semântica e acessível
+├── main.js              # Controlador principal da aplicação
+├── .gitignore           # Regras de exclusão do Git
+├── LICENSE              # Licença MIT
+├── package.json         # Manifesto do projeto
+└── README.md            # Documentação técnica oficial
 ```
 
 ---
@@ -98,16 +95,16 @@ git clone https://github.com/Douglock/foco-ds.git
 cd foco-ds
 ```
 
-2. Abra o arquivo `src/index.html` diretamente em seu navegador, ou suba um servidor estático local:
+2. Abra o arquivo `index.html` diretamente em seu navegador, ou inicie um servidor estático local:
 ```bash
 # Com Python 3
-python3 -m http.server 3000 --directory src
+python3 -m http.server 3000
 
 # Ou com Node.js
-npx serve src
+npx serve .
 ```
 
-3. Acesse `http://localhost:3000` e bons blocos de foco!
+3. Acesse `http://localhost:3000` e aproveite suas sessões de foco!
 
 ---
 

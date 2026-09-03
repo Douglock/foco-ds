@@ -1,12 +1,12 @@
 {
   "name": "foco-ds",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Aplicativo para gestão de tempo, hiperfoco e alta performance pessoal.",
-  "main": "src/main.js",
+  "main": "main.js",
   "type": "module",
   "scripts": {
-    "dev": "npx serve src",
-    "start": "npx serve src"
+    "dev": "npx serve .",
+    "start": "npx serve ."
   },
   "keywords": [
     "productivity",

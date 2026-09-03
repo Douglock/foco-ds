@@ -2,9 +2,14 @@ import Foundation
 import AppKit
 import SwiftUI
 
+final class FloatingNotePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 @MainActor
 final class NotesPanelController {
-    private var panel: NSPanel?
+    private var panel: FloatingNotePanel?
     private weak var model: FocoDSModel?
     private weak var pillWindow: NSWindow?
 
@@ -17,9 +22,9 @@ final class NotesPanelController {
     private func setupPanel() {
         guard let model = model else { return }
 
-        let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 210),
-            styleMask: [.borderless, .nonactivatingPanel],
+        let p = FloatingNotePanel(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 220),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -29,7 +34,7 @@ final class NotesPanelController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = false // Clean, no heavy black shadow!
+        p.hasShadow = false
         p.isMovableByWindowBackground = true
 
         let contentView = NSHostingView(rootView: FloatingNoteContentView(model: model, onClose: { [weak self] in
@@ -51,15 +56,22 @@ final class NotesPanelController {
     func show() {
         guard let p = panel, let model = model else { return }
 
-        // Position right below or to the side of the pill window
+        // Position directly below the pill window in real time
         if let pill = pillWindow {
             let pillFrame = pill.frame
             let x = pillFrame.origin.x + (pillFrame.width - p.frame.width) / 2
-            let y = pillFrame.origin.y - p.frame.height - 8
+            var y = pillFrame.origin.y - p.frame.height - 8
+
+            // If would go below screen bottom, position above pill
+            if y < 10 && pill.screen != nil {
+                y = pillFrame.origin.y + pillFrame.height + 8
+            }
+
             p.setFrameOrigin(NSPoint(x: x, y: y))
         }
 
-        p.orderFrontRegardless()
+        p.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
         model.isSideNotesOpen = true
     }
 
@@ -79,15 +91,15 @@ struct FloatingNoteContentView: View {
             // Header
             HStack(spacing: 6) {
                 Text("📝")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Notas da Tarefa")
+                    Text("Anotações da Tarefa")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white.opacity(0.95))
 
                     Text(model.taskTitle)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 9.5, weight: .medium))
                         .foregroundColor(Color(red: 16/255, green: 185/255, blue: 129/255))
                         .lineLimit(1)
                 }
@@ -114,9 +126,9 @@ struct FloatingNoteContentView: View {
             .font(.system(size: 12, design: .default))
             .focused($isFocused)
             .scrollContentBackground(.hidden)
-            .background(Color.black.opacity(0.3))
+            .background(Color.black.opacity(0.35))
             .cornerRadius(8)
-            .frame(minHeight: 110)
+            .frame(minHeight: 120)
 
             // Footer
             HStack {
@@ -124,9 +136,9 @@ struct FloatingNoteContentView: View {
                     Circle()
                         .fill(Color(red: 16/255, green: 185/255, blue: 129/255))
                         .frame(width: 5, height: 5)
-                    Text("Salva no Super Productivity")
+                    Text("Sincronizado com Super Productivity")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.white.opacity(0.55))
                 }
 
                 Spacer()
@@ -136,21 +148,23 @@ struct FloatingNoteContentView: View {
                     NSPasteboard.general.setString(model.notesText, forType: .string)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(Color(red: 16/255, green: 185/255, blue: 129/255))
             }
         }
-        .padding(12)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(red: 16/255, green: 20/255, blue: 30/255).opacity(0.92))
+                .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(0.95))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
                 )
         )
         .onAppear {
-            isFocused = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                isFocused = true
+            }
         }
     }
 }

@@ -7,42 +7,52 @@ struct FocoDSPillView: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            // 1. Single Refined Status Dot
-            statusIndicator
+            // Main Action Area: Drag window & Click to open Super Productivity
+            HStack(spacing: 9) {
+                // 1. Single Refined Status Dot
+                statusIndicator
 
-            // 2. Tarefa em Foco
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.taskTitle)
-                    .font(.system(size: 12.5, weight: .semibold, design: .default))
-                    .foregroundColor(.white.opacity(0.95))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 200, alignment: .leading)
+                // 2. Tarefa em Foco
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.taskTitle)
+                        .font(.system(size: 12.5, weight: .semibold, design: .default))
+                        .foregroundColor(.white.opacity(0.95))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 200, alignment: .leading)
 
-                Text(statusSubtitle)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(statusColor.opacity(0.85))
+                    Text(statusSubtitle)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(statusColor.opacity(0.85))
+                }
+
+                // 3. Subtle Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 1, height: 14)
+
+                // 4. Digital Time Clock
+                Text(model.formattedTime)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundColor(timerColor)
             }
+            .contentShape(Rectangle())
+            .overlay(
+                // Native Window Drag & Click to open Super Productivity
+                NativeDragAndClickHandler(onClick: {
+                    SuperProductivityLauncher.activateSuperProductivity()
+                })
+            )
 
-            // 3. Subtle Divider
-            Rectangle()
-                .fill(Color.white.opacity(0.12))
-                .frame(width: 1, height: 14)
-
-            // 4. Digital Time Clock
-            Text(model.formattedTime)
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundColor(timerColor)
-
-            // 5. Minimalist Note Button (Clique uma vez para abrir nota flutuante)
+            // 5. Minimalist Note Button (ISOLATED - NOT COVERED BY DRAG/CLICK HANDLER)
             Button(action: {
                 model.toggleSideNotes()
             }) {
                 ZStack(alignment: .topTrailing) {
                     Text("📝")
                         .font(.system(size: 12))
-                        .padding(4)
-                        .background(model.isSideNotesOpen ? Color.white.opacity(0.20) : Color.white.opacity(0.06))
+                        .padding(5)
+                        .background(model.isSideNotesOpen ? Color.white.opacity(0.24) : Color.white.opacity(0.08))
                         .cornerRadius(6)
 
                     if !model.notesText.isEmpty {
@@ -54,7 +64,7 @@ struct FocoDSPillView: View {
                 }
             }
             .buttonStyle(.plain)
-            .help("Anotações da Tarefa • Sincronizado com Super Productivity")
+            .help("Anotações da Tarefa (Clique para abrir/fechar)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
@@ -81,7 +91,7 @@ struct FocoDSPillView: View {
                         .animation(.easeInOut(duration: 0.3), value: model.progress)
                 }
 
-                // Linha de Progresso Fina na Base (sem vazar para fora!)
+                // Linha de Progresso Fina na Base
                 VStack {
                     Spacer()
                     GeometryReader { geo in
@@ -93,7 +103,7 @@ struct FocoDSPillView: View {
                     .frame(height: 2)
                 }
             }
-            .clipShape(Capsule()) // Clip to ensure perfect capsule curve!
+            .clipShape(Capsule())
         )
         .overlay(
             // Crisp 1px border stroke (pisca se finalizou foco)
@@ -105,13 +115,6 @@ struct FocoDSPillView: View {
                 self.isHovering = hovering
             }
         }
-        .overlay(
-            // Native Window Drag & Click Handler (except over note button)
-            NativeDragAndClickHandler(onClick: {
-                SuperProductivityLauncher.activateSuperProductivity()
-            })
-        )
-        .help("Foco DS • Clique para abrir Super Productivity")
     }
 
     private var statusIndicator: some View {

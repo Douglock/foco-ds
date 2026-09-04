@@ -4,6 +4,10 @@ import AppKit
 final class FocoDSPillPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+    override var isMovable: Bool {
+        get { true }
+        set { }
+    }
 }
 
 @main
@@ -132,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.isMovableByWindowBackground = false
+        panel.isMovableByWindowBackground = true
 
         let hostingView = NSHostingView(rootView: FocoDSPillView(model: model))
         panel.contentView = hostingView
@@ -145,34 +149,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyWindowPosition() {
         guard let panel = window, let screen = NSScreen.main else { return }
 
+        // CRITICAL: If user is actively dragging or holding mouse down, never interrupt frame!
+        if NSEvent.pressedMouseButtons != 0 {
+            return
+        }
+
         if model.visualStyle == "lateral" {
             let targetWidth: CGFloat = model.showTaskCreateCard ? 336 : 56
             let targetHeight: CGFloat = 340
-            panel.setContentSize(NSSize(width: targetWidth, height: targetHeight))
-
             let y = screen.frame.midY - targetHeight / 2 + 20
-            let x: CGFloat
-            if model.dockSide == "right" {
-                x = screen.frame.maxX - targetWidth
-            } else {
-                x = screen.frame.minX
+            let x: CGFloat = (model.dockSide == "right") ? (screen.frame.maxX - targetWidth) : screen.frame.minX
+            let targetRect = NSRect(x: x, y: y, width: targetWidth, height: targetHeight)
+            if panel.frame != targetRect {
+                panel.setFrame(targetRect, display: true, animate: false)
             }
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
         } else {
             let targetWidth: CGFloat = model.isCompactCircle ? 44 : max(260, min(800, model.pillWidth))
             let targetHeight: CGFloat = model.isCompactCircle ? 42 : 40
-            panel.setContentSize(NSSize(width: targetWidth, height: targetHeight))
 
+            let targetRect: NSRect
             if model.isNotchSnapped {
                 let screenFrame = screen.frame
                 let x = screenFrame.origin.x + (screenFrame.width - targetWidth) / 2
                 let y = screenFrame.maxY - targetHeight
-                panel.setFrameOrigin(NSPoint(x: x, y: y))
+                targetRect = NSRect(x: x, y: y, width: targetWidth, height: targetHeight)
             } else {
-                let screenRect = screen.visibleFrame
-                let x = screenRect.origin.x + (screenRect.width - targetWidth) / 2
-                let y = screenRect.origin.y + screenRect.height - targetHeight - 10
-                panel.setFrameOrigin(NSPoint(x: x, y: y))
+                let currentFrame = panel.frame
+                // Preserve user-dragged position if already placed on screen
+                if currentFrame.origin.x > 10 || currentFrame.origin.y > 10 {
+                    let newX = currentFrame.midX - targetWidth / 2
+                    targetRect = NSRect(x: newX, y: currentFrame.origin.y, width: targetWidth, height: targetHeight)
+                } else {
+                    let screenRect = screen.visibleFrame
+                    let x = screenRect.origin.x + (screenRect.width - targetWidth) / 2
+                    let y = screenRect.origin.y + screenRect.height - targetHeight - 10
+                    targetRect = NSRect(x: x, y: y, width: targetWidth, height: targetHeight)
+                }
+            }
+
+            if panel.frame != targetRect {
+                panel.setFrame(targetRect, display: true, animate: false)
             }
         }
         panel.orderFrontRegardless()

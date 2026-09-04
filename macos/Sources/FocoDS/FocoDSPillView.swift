@@ -26,68 +26,69 @@ struct FocoDSPillView: View {
 
     // MARK: - Modo 1: Círculo Compacto ("Diminuir até o ponto de ver apenas o círculo")
     private var compactCircleView: some View {
-        Button(action: {
-            if model.isPaused {
-                model.resumeCurrentTask()
-            } else {
-                model.toggleCompactCircle()
-            }
-        }) {
-            ZStack {
-                // Background dark disc
+        ZStack {
+            // Background dark disc
+            Circle()
+                .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(model.pillOpacity))
+                .frame(width: 38, height: 38)
+
+            // Idle Reminder Breathing Glow
+            if model.isIdleReminderActive {
                 Circle()
-                    .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(model.pillOpacity))
-                    .frame(width: 38, height: 38)
-
-                // Idle Reminder Breathing Glow
-                if model.isIdleReminderActive {
-                    Circle()
-                        .stroke(Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.7), lineWidth: 2)
-                        .scaleEffect(1.12)
-                }
-
-                // Tracking Active: Glowing circular ring around icon
-                if model.isTracking {
-                    Circle()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 2.8)
-                        .frame(width: 32, height: 32)
-
-                    Circle()
-                        .trim(from: 0, to: max(0.04, min(1.0, model.progress)))
-                        .stroke(
-                            statusColor,
-                            style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 32, height: 32)
-                        .animation(.easeInOut(duration: 0.3), value: model.progress)
-
-                    ClaudeStarburst(size: 13, color: .white)
-                } else if model.isPaused {
-                    // Paused State: Amber pause ring
-                    Circle()
-                        .stroke(Color(red: 255/255, green: 180/255, blue: 0/255), lineWidth: 2.2)
-                        .frame(width: 32, height: 32)
-
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(red: 255/255, green: 180/255, blue: 0/255))
-                } else {
-                    // Idle / Habits State
-                    Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 2.0)
-                        .frame(width: 30, height: 30)
-
-                    Text(model.isIdleReminderActive ? "⚡" : "🎯")
-                        .font(.system(size: 13))
-                }
+                    .stroke(Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.7), lineWidth: 2)
+                    .scaleEffect(1.12)
             }
-            .frame(width: 42, height: 40)
+
+            // Tracking Active: Glowing circular ring around icon
+            if model.isTracking {
+                Circle()
+                    .stroke(Color.white.opacity(0.12), lineWidth: 2.8)
+                    .frame(width: 32, height: 32)
+
+                Circle()
+                    .trim(from: 0, to: max(0.04, min(1.0, model.progress)))
+                    .stroke(
+                        statusColor,
+                        style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 32, height: 32)
+                    .animation(.easeInOut(duration: 0.3), value: model.progress)
+
+                ClaudeStarburst(size: 13, color: .white)
+            } else if model.isPaused {
+                // Paused State: Amber pause ring
+                Circle()
+                    .stroke(Color(red: 255/255, green: 180/255, blue: 0/255), lineWidth: 2.2)
+                    .frame(width: 32, height: 32)
+
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color(red: 255/255, green: 180/255, blue: 0/255))
+            } else {
+                // Idle / Habits State
+                Circle()
+                    .stroke(Color.white.opacity(0.15), lineWidth: 2.0)
+                    .frame(width: 30, height: 30)
+
+                Text(model.isIdleReminderActive ? "⚡" : "🎯")
+                    .font(.system(size: 13))
+            }
         }
-        .buttonStyle(.plain)
+        .frame(width: 42, height: 40)
+        .contentShape(Circle())
         .overlay(
             Circle()
                 .stroke(borderStrokeColor, lineWidth: 1.0)
+        )
+        .overlay(
+            NativeDragAndClickHandler(onClick: {
+                if model.isPaused {
+                    model.resumeCurrentTask()
+                } else {
+                    model.toggleCompactCircle()
+                }
+            })
         )
         .help(compactTooltipText)
     }
@@ -108,11 +109,6 @@ struct FocoDSPillView: View {
     // MARK: - Modo 2: Pílula Clássica HUD (Largura Ajustável)
     private var classicPillContainer: some View {
         HStack(spacing: 0) {
-            // Alça de Redimensionamento Esquerda
-            if isHovering {
-                resizeHandle(isLeft: true)
-            }
-
             Group {
                 if (model.isTracking || model.isPaused) && !model.taskTitle.isEmpty {
                     classicActiveTaskView
@@ -120,13 +116,8 @@ struct FocoDSPillView: View {
                     classicHabitsView
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 14)
             .padding(.vertical, 7)
-
-            // Alça de Redimensionamento Direita
-            if isHovering {
-                resizeHandle(isLeft: false)
-            }
         }
         .background(
             ZStack(alignment: .leading) {
@@ -156,21 +147,26 @@ struct FocoDSPillView: View {
             Capsule()
                 .stroke(borderStrokeColor, lineWidth: model.isPillFlashing ? 2.0 : 1.0)
         )
+        // Alças laterais em OVERLAY - NUNCA empurram nem animam o texto ao passar o mouse!
+        .overlay(alignment: .leading) {
+            resizeHandle(isLeft: true)
+        }
+        .overlay(alignment: .trailing) {
+            resizeHandle(isLeft: false)
+        }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
-                self.isHovering = hovering
-            }
+            self.isHovering = hovering
         }
     }
 
-    // Alça de Redimensionamento Interativo Seguro (Limites estritos de 260px a 760px)
+    // Alça de Redimensionamento Interativo Seguro em Overlay (Limites estritos de 280px a 780px)
     private func resizeHandle(isLeft: Bool) -> some View {
         ZStack {
             Capsule()
-                .fill(Color.white.opacity(0.35))
+                .fill(Color.white.opacity(isHovering ? 0.45 : 0.0))
                 .frame(width: 3.5, height: 16)
         }
-        .frame(width: 14, height: 28)
+        .frame(width: 20, height: 34)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 1)
@@ -179,10 +175,10 @@ struct FocoDSPillView: View {
                         dragInitialWidth = model.pillWidth
                     }
                     guard let startWidth = dragInitialWidth else { return }
-                    let delta = (isLeft ? -value.translation.width : value.translation.width) * 1.8
-                    // STRICT SAFETY BOUNDS: Minimum 260px, Maximum 760px!
-                    let candidate = max(260, min(760, startWidth + delta))
-                    if abs(model.pillWidth - candidate) >= 2 {
+                    let delta = (isLeft ? -value.translation.width : value.translation.width) * 1.5
+                    // STRICT SAFETY BOUNDS: Minimum 280px, Maximum 780px!
+                    let candidate = max(280, min(780, startWidth + delta))
+                    if abs(model.pillWidth - candidate) >= 3 {
                         model.setPillWidth(candidate)
                     }
                 }
@@ -236,6 +232,20 @@ struct FocoDSPillView: View {
                 })
             )
 
+            // Botão de Ajuste Rápido de Largura (↔️) - 1 clique para ver todo o título e tempo!
+            Button(action: {
+                cyclePillWidth()
+            }) {
+                Image(systemName: "arrow.left.and.right")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(5)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help("Ajustar largura (\(Int(model.pillWidth))px) • Clique para expandir ou diminuir")
+
             // Minimalist Note Button (📝)
             Button(action: {
                 model.toggleSideNotes()
@@ -288,8 +298,35 @@ struct FocoDSPillView: View {
                     }
                 }
             }
+
+            // Botão de Ajuste Rápido de Largura também na visualização de hábitos
+            Button(action: {
+                cyclePillWidth()
+            }) {
+                Image(systemName: "arrow.left.and.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.55))
+                    .padding(4)
+                    .background(Color.white.opacity(0.06))
+                    .cornerRadius(5)
+            }
+            .buttonStyle(.plain)
+            .help("Ajustar largura (\(Int(model.pillWidth))px)")
         }
         .padding(.horizontal, 4)
+    }
+
+    private func cyclePillWidth() {
+        if model.pillWidth < 420 {
+            model.setPillWidth(520) // Amplo - ver todo título e tempo
+        } else if model.pillWidth < 600 {
+            model.setPillWidth(700) // Máximo
+        } else if model.pillWidth < 740 {
+            model.setPillWidth(360) // Compacto
+        } else {
+            model.setPillWidth(480) // Padrão
+        }
+        UserDefaults.standard.set(Double(model.pillWidth), forKey: "foco_ds_pill_width")
     }
 
     // MARK: - Estilo 2: Anéis Horizontais

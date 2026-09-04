@@ -8,6 +8,35 @@ struct HabitItem: Identifiable, Codable, Equatable {
     let emoji: String
     let count: Int?
     let isOn: Bool?
+    var counterType: String? = nil
+
+    var displayCount: String {
+        guard let c = count, c > 0 else { return "" }
+
+        // Se for contador de tempo (StopWatch) ou se o valor for em milissegundos (>= 60.000 ms)
+        let isTimeBased = (counterType == "StopWatch" || c >= 60000)
+        if isTimeBased {
+            if c >= 3600000 {
+                let hours = Double(c) / 3600000.0
+                if hours.truncatingRemainder(dividingBy: 1.0) == 0 {
+                    return "\(Int(hours))h"
+                } else {
+                    return String(format: "%.1fh", hours)
+                }
+            } else if c >= 60000 {
+                let mins = c / 60000
+                return "\(mins)m"
+            } else {
+                let secs = c / 1000
+                return "\(secs)s"
+            }
+        }
+
+        if c > 999 {
+            return "999+"
+        }
+        return "\(c)"
+    }
 }
 
 @MainActor

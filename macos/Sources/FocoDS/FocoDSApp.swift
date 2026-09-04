@@ -115,7 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.hidesOnDeactivate = false
+        panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -163,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 panel.setFrameOrigin(NSPoint(x: x, y: y))
             }
         }
+        panel.orderFrontRegardless()
     }
 
     private func setupStatusItem() {

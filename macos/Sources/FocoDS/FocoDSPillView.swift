@@ -282,12 +282,6 @@ struct FocoDSPillView: View {
             }
         }
         .padding(.horizontal, 4)
-        .contentShape(Rectangle())
-        .overlay(
-            NativeDragAndClickHandler(onClick: {
-                SuperProductivityLauncher.activateSuperProductivity()
-            })
-        )
     }
 
     // MARK: - Estilo 2: Anéis Horizontais
@@ -724,7 +718,7 @@ struct CircularItemGauge: View {
     }
 }
 
-// Single Habit Icon Button with count badge
+// Single Habit Icon Button with smart count / duration badge
 struct HabitButton: View {
     let habit: HabitItem
     let action: () -> Void
@@ -741,21 +735,45 @@ struct HabitButton: View {
                     .scaleEffect(isHovered ? 1.15 : 1.0)
                     .animation(.easeInOut(duration: 0.12), value: isHovered)
 
-                if let count = habit.count, count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                let badgeText = habit.displayCount
+                if !badgeText.isEmpty {
+                    Text(badgeText)
+                        .font(.system(size: 8.5, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(Color(red: 16/255, green: 185/255, blue: 129/255))
+                        .padding(.horizontal, 4.5)
+                        .padding(.vertical, 1.5)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 16/255, green: 185/255, blue: 129/255),
+                                    Color(red: 5/255, green: 150/255, blue: 105/255)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .clipShape(Capsule())
-                        .offset(x: 4, y: -3)
+                        .overlay(
+                            Capsule()
+                                .stroke(Color(red: 16/255, green: 22/255, blue: 34/255), lineWidth: 1.2)
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 2, x: 0, y: 1)
+                        .offset(x: 6, y: -4)
+                        .fixedSize(horizontal: true, vertical: true)
                 }
             }
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help("\(habit.title) • Clique para registrar")
+        .help("\(habit.title) • \(habitTooltipText)")
+    }
+
+    private var habitTooltipText: String {
+        let badge = habit.displayCount
+        if badge.isEmpty {
+            return "Clique para registrar"
+        }
+        return "\(badge) registrado hoje • Clique para registrar"
     }
 }
 

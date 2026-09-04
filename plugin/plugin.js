@@ -165,26 +165,34 @@ async function syncState() {
       if (rawCounters.length > 0) {
         mappedHabits = rawCounters
           .filter(c => c && c.isEnabled !== false)
-          .map(c => ({
-            id: String(c.id),
-            title: String(c.title || ""),
-            emoji: extractEmojiForHabit(c),
-            count: Number(c.countOnDay?.[todayStr] || c.valueOnDay?.[todayStr] || 0),
-            isOn: Boolean(c.isOn)
-          }));
+          .map(c => {
+            const val = Number(c.countOnDay?.[todayStr] || c.valueOnDay?.[todayStr] || 0);
+            return {
+              id: String(c.id),
+              title: String(c.title || ""),
+              emoji: extractEmojiForHabit(c),
+              count: val,
+              counterType: String(c.type || (val >= 60000 ? "StopWatch" : "ClickCounter")),
+              isOn: Boolean(c.isOn)
+            };
+          });
       } else if (typeof PluginAPI.getAllSimpleCounters === "function") {
         try {
           const counters = await PluginAPI.getAllSimpleCounters();
           if (Array.isArray(counters)) {
             mappedHabits = counters
               .filter(c => c && c.isEnabled !== false)
-              .map(c => ({
-                id: String(c.id),
-                title: String(c.title || ""),
-                emoji: extractEmojiForHabit(c),
-                count: Number(c.countOnDay?.[todayStr] || c.valueOnDay?.[todayStr] || 0),
-                isOn: Boolean(c.isOn)
-              }));
+              .map(c => {
+                const val = Number(c.countOnDay?.[todayStr] || c.valueOnDay?.[todayStr] || 0);
+                return {
+                  id: String(c.id),
+                  title: String(c.title || ""),
+                  emoji: extractEmojiForHabit(c),
+                  count: val,
+                  counterType: String(c.type || (val >= 60000 ? "StopWatch" : "ClickCounter")),
+                  isOn: Boolean(c.isOn)
+                };
+              });
           }
         } catch (e) {}
       }

@@ -19,9 +19,6 @@ struct FocoDSPillView: View {
                 classicPillContainer
             }
         }
-        .contextMenu {
-            focoDSContextMenu
-        }
     }
 
     // MARK: - Modo 1: Círculo Compacto ("Diminuir até o ponto de ver apenas o círculo")
@@ -107,6 +104,7 @@ struct FocoDSPillView: View {
     }
 
     // MARK: - Modo 2: Pílula Clássica HUD (Largura Ajustável)
+    // MARK: - Modo 2: Pílula Clássica HUD (Largura Ajustável)
     private var classicPillContainer: some View {
         HStack(spacing: 0) {
             Group {
@@ -125,7 +123,7 @@ struct FocoDSPillView: View {
                 Capsule()
                     .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(model.pillOpacity))
 
-                // Barra de Progresso Suave (Tracking verde / Pausado âmbar)
+                // Barra de Progresso Suave (Tracking verde / Pausado âmbar / Overtime vermelho)
                 if model.isTracking || model.isPaused {
                     GeometryReader { geo in
                         Capsule()
@@ -136,7 +134,7 @@ struct FocoDSPillView: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .frame(width: max(0, geo.size.width * CGFloat(model.progress)))
+                            .frame(width: max(0, geo.size.width * CGFloat(model.isOvertime ? 1.0 : model.progress)))
                             .animation(.easeInOut(duration: 0.3), value: model.progress)
                     }
                 }
@@ -147,47 +145,14 @@ struct FocoDSPillView: View {
             Capsule()
                 .stroke(borderStrokeColor, lineWidth: model.isPillFlashing ? 2.0 : 1.0)
         )
-        // Alças laterais em OVERLAY - NUNCA empurram nem animam o texto ao passar o mouse!
-        .overlay(alignment: .leading) {
-            resizeHandle(isLeft: true)
-        }
-        .overlay(alignment: .trailing) {
-            resizeHandle(isLeft: false)
-        }
         .onHover { hovering in
-            self.isHovering = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                self.isHovering = hovering
+            }
         }
-    }
-
-    // Alça de Redimensionamento Interativo Seguro em Overlay (Limites estritos de 280px a 780px)
-    private func resizeHandle(isLeft: Bool) -> some View {
-        ZStack {
-            Capsule()
-                .fill(Color.white.opacity(isHovering ? 0.45 : 0.0))
-                .frame(width: 3.5, height: 16)
+        .onTapGesture(count: 2) {
+            autoFitTitleWidth()
         }
-        .frame(width: 20, height: 34)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    if dragInitialWidth == nil {
-                        dragInitialWidth = model.pillWidth
-                    }
-                    guard let startWidth = dragInitialWidth else { return }
-                    let delta = (isLeft ? -value.translation.width : value.translation.width) * 1.5
-                    // STRICT SAFETY BOUNDS: Minimum 280px, Maximum 780px!
-                    let candidate = max(280, min(780, startWidth + delta))
-                    if abs(model.pillWidth - candidate) >= 3 {
-                        model.setPillWidth(candidate)
-                    }
-                }
-                .onEnded { _ in
-                    dragInitialWidth = nil
-                    UserDefaults.standard.set(Double(model.pillWidth), forKey: "foco_ds_pill_width")
-                }
-        )
-        .help("Arraste para aumentar ou diminuir a largura")
     }
 
     // MARK: - Classic Active Task View (Suporta todo título e tempo estimado sem cortes)
@@ -204,10 +169,11 @@ struct FocoDSPillView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
+                        .help("\(model.taskTitle) • Clique duplo para ajustar largura automaticamente")
 
                     Text(statusSubtitle)
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(statusColor.opacity(0.88))
+                        .foregroundColor(statusColor.opacity(0.92))
                 }
 
                 Rectangle()
@@ -232,19 +198,22 @@ struct FocoDSPillView: View {
                 })
             )
 
-            // Botão de Ajuste Rápido de Largura (↔️) - 1 clique para ver todo o título e tempo!
-            Button(action: {
-                cyclePillWidth()
-            }) {
-                Image(systemName: "arrow.left.and.right")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(5)
-                    .background(Color.white.opacity(0.08))
-                    .cornerRadius(6)
+            // Botão de Ajuste Rápido de Largura (↔️) - SÓ APARECE NO HOVER!
+            if isHovering {
+                Button(action: {
+                    cyclePillWidth()
+                }) {
+                    Image(systemName: "arrow.left.and.right")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .padding(5)
+                        .background(Color.white.opacity(0.12))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+                .help("Ajustar tamanho (\(Int(model.pillWidth))px) • Clique para alternar ou diminuir até a Bolinha")
             }
-            .buttonStyle(.plain)
-            .help("Ajustar largura (\(Int(model.pillWidth))px) • Clique para expandir ou diminuir")
 
             // Minimalist Note Button (📝)
             Button(action: {
@@ -281,7 +250,7 @@ struct FocoDSPillView: View {
                     .frame(width: 8, height: 8)
             }
             .buttonStyle(.plain)
-            .help("Clique para alternar para Círculo")
+            .help("Clique para diminuir para Bolinha / Círculo")
 
             if model.isIdleReminderActive {
                 Text("⚡ \(model.idleMinutesWithoutFocus)m sem foco • Clique para iniciar")
@@ -299,34 +268,57 @@ struct FocoDSPillView: View {
                 }
             }
 
-            // Botão de Ajuste Rápido de Largura também na visualização de hábitos
-            Button(action: {
-                cyclePillWidth()
-            }) {
-                Image(systemName: "arrow.left.and.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.55))
-                    .padding(4)
-                    .background(Color.white.opacity(0.06))
-                    .cornerRadius(5)
+            // Botão de Ajuste Rápido de Largura - SÓ APARECE NO HOVER também nos hábitos!
+            if isHovering {
+                Button(action: {
+                    cyclePillWidth()
+                }) {
+                    Image(systemName: "arrow.left.and.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.75))
+                        .padding(4)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(5)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+                .help("Ajustar tamanho (\(Int(model.pillWidth))px) • Clique para alternar ou diminuir até a Bolinha")
             }
-            .buttonStyle(.plain)
-            .help("Ajustar largura (\(Int(model.pillWidth))px)")
         }
         .padding(.horizontal, 4)
     }
 
     private func cyclePillWidth() {
-        if model.pillWidth < 420 {
-            model.setPillWidth(520) // Amplo - ver todo título e tempo
-        } else if model.pillWidth < 600 {
-            model.setPillWidth(700) // Máximo
-        } else if model.pillWidth < 740 {
-            model.setPillWidth(360) // Compacto
+        if model.isCompactCircle {
+            // Se já for a bolinha, expande para a pílula padrão
+            model.isCompactCircle = false
+            model.setPillWidth(480)
+        } else if model.pillWidth < 400 {
+            // De compacto (360px) -> diminui até a BOLINHA!
+            model.isCompactCircle = true
+        } else if model.pillWidth < 520 {
+            // De padrão (480px) -> vai para Amplo (620px - cabe todo o título e tempo)
+            model.setPillWidth(620)
+        } else if model.pillWidth < 680 {
+            // De amplo (620px) -> vai para Máximo (740px)
+            model.setPillWidth(740)
         } else {
-            model.setPillWidth(480) // Padrão
+            // De máximo (740px) -> vai para Compacto (360px)
+            model.setPillWidth(360)
         }
         UserDefaults.standard.set(Double(model.pillWidth), forKey: "foco_ds_pill_width")
+        UserDefaults.standard.set(model.isCompactCircle, forKey: "foco_ds_compact_circle")
+    }
+
+    private func autoFitTitleWidth() {
+        guard !model.taskTitle.isEmpty else { return }
+        if model.isCompactCircle {
+            model.isCompactCircle = false
+        }
+        let titleLen = CGFloat(model.taskTitle.count)
+        let needed = max(420, min(800, titleLen * 8.5 + 290))
+        model.setPillWidth(needed)
+        UserDefaults.standard.set(Double(needed), forKey: "foco_ds_pill_width")
     }
 
     // MARK: - Estilo 2: Anéis Horizontais
@@ -409,156 +401,7 @@ struct FocoDSPillView: View {
         )
     }
 
-    // MARK: - Right Click Context Menu (Configurações Completas)
-    @ViewBuilder
-    private var focoDSContextMenu: some View {
-        Button("➕ Criar Nova Tarefa de Foco...") {
-            model.toggleTaskCreateCard()
-        }
-
-        if model.isPaused {
-            Button("▶️ Retomar Foco na Tarefa Atual") {
-                model.resumeCurrentTask()
-            }
-        }
-
-        Divider()
-
-        // Alternar Círculo vs Pílula
-        Button(model.isCompactCircle ? "↔️ Expandir para Pílula Completa" : "⭕ Diminuir até Apenas o Círculo") {
-            model.toggleCompactCircle()
-        }
-
-        // Largura da Pílula (Aumentar e Diminuir pros Lados)
-        Menu("📏 Largura da Pílula") {
-            Button("⭕ Apenas o Círculo (Compacto)") {
-                model.isCompactCircle = true
-            }
-            Divider()
-            Button(model.pillWidth == 340 && !model.isCompactCircle ? "✓ Compacto (340px)" : "Compacto (340px)") {
-                model.setPillWidth(340)
-            }
-            Button(model.pillWidth == 480 && !model.isCompactCircle ? "✓ Padrão (480px)" : "Padrão (480px)") {
-                model.setPillWidth(480)
-            }
-            Button(model.pillWidth == 580 && !model.isCompactCircle ? "✓ Amplo - Ver Todo Título e Tempo (580px)" : "Amplo - Ver Todo Título e Tempo (580px)") {
-                model.setPillWidth(580)
-            }
-            Button(model.pillWidth == 700 && !model.isCompactCircle ? "✓ Máximo (700px)" : "Máximo (700px)") {
-                model.setPillWidth(700)
-            }
-        }
-
-        // Lembrete de Inatividade (Aviso sutil na Island se muito tempo sem focar)
-        Menu("⏰ Aviso de Inatividade") {
-            Button(model.idleReminderThresholdMinutes == 10 ? "✓ 10 minutos sem foco" : "10 minutos sem foco") {
-                model.setIdleReminderMinutes(10)
-            }
-            Button(model.idleReminderThresholdMinutes == 15 ? "✓ 15 minutos sem foco (Padrão)" : "15 minutos sem foco (Padrão)") {
-                model.setIdleReminderMinutes(15)
-            }
-            Button(model.idleReminderThresholdMinutes == 30 ? "✓ 30 minutos sem foco" : "30 minutos sem foco") {
-                model.setIdleReminderMinutes(30)
-            }
-            Button(model.idleReminderThresholdMinutes == 0 ? "✓ Desativado" : "Desativado") {
-                model.setIdleReminderMinutes(0)
-            }
-        }
-
-        Divider()
-
-        // Estilo Visual (Dock Lateral vs Pílula Topo)
-        Menu("🎨 Estilo Visual") {
-            Button(model.visualStyle == "lateral" ? "✓ Dock Lateral com Anéis (Colado na Lateral)" : "Dock Lateral com Anéis (Colado na Lateral)") {
-                model.setVisualStyle("lateral")
-            }
-            Button(model.visualStyle == "classic" ? "✓ Pílula HUD Superior (Notch)" : "Pílula HUD Superior (Notch)") {
-                model.setVisualStyle("classic")
-            }
-            Button(model.visualStyle == "circular" ? "✓ Anéis Horizontais" : "Anéis Horizontais") {
-                model.setVisualStyle("circular")
-            }
-        }
-
-        // Posição na Lateral
-        if model.visualStyle == "lateral" {
-            Menu("📱 Lado da Tela") {
-                Button(model.dockSide == "right" ? "✓ Lateral Direita" : "Lateral Direita") {
-                    model.setDockSide("right")
-                }
-                Button(model.dockSide == "left" ? "✓ Lateral Esquerda" : "Lateral Esquerda") {
-                    model.setDockSide("left")
-                }
-            }
-        } else {
-            Menu("🧲 Encaixe no Topo") {
-                Button(model.isNotchSnapped ? "✓ Encaixe Magnético no Notch" : "Encaixe Magnético no Notch") {
-                    if !model.isNotchSnapped { model.toggleNotchSnap() }
-                }
-                Button(!model.isNotchSnapped ? "✓ Flutuação Livre (Arrastável)" : "Flutuação Livre (Arrastável)") {
-                    if model.isNotchSnapped { model.toggleNotchSnap() }
-                }
-            }
-        }
-
-        // Opacidade Regulável
-        Menu("🎛️ Opacidade do Fundo") {
-            Button(model.pillOpacity >= 0.95 ? "✓ 100% (Sólido Preto)" : "100% (Sólido Preto)") {
-                model.setPillOpacity(1.0)
-            }
-            Button(model.pillOpacity >= 0.80 && model.pillOpacity < 0.95 ? "✓ 85% (Padrão Vidro)" : "85% (Padrão Vidro)") {
-                model.setPillOpacity(0.85)
-            }
-            Button(model.pillOpacity >= 0.65 && model.pillOpacity < 0.80 ? "✓ 70% (Translúcido)" : "70% (Translúcido)") {
-                model.setPillOpacity(0.70)
-            }
-            Button(model.pillOpacity < 0.65 ? "✓ 50% (Vidro Leve)" : "50% (Vidro Leve)") {
-                model.setPillOpacity(0.50)
-            }
-        }
-
-        // Estimativa da Tarefa
-        Menu("⏱️ Definir Estimativa") {
-            Button("15 minutos") { model.setTaskEstimate(minutes: 15) }
-            Button("25 minutos") { model.setTaskEstimate(minutes: 25) }
-            Button("30 minutos") { model.setTaskEstimate(minutes: 30) }
-            Button("45 minutos") { model.setTaskEstimate(minutes: 45) }
-            Button("60 minutos (1h)") { model.setTaskEstimate(minutes: 60) }
-            Divider()
-            Button("Sem estimativa") { model.setTaskEstimate(minutes: 0) }
-        }
-
-        // Sons e Efeitos
-        Menu("🔊 Sons e Efeitos") {
-            Button(model.playAudioOnStart ? "✓ Tocar Som ao Iniciar Foco (Play)" : "Tocar Som ao Iniciar Foco (Play)") {
-                model.togglePlayAudio()
-            }
-            Divider()
-            Button("Testar Som de Play (Submarine)") {
-                ScreenFlashController.playStartFocusSound()
-            }
-            Button("Testar Flash de Borda Verde (1s)") {
-                ScreenFlashController.triggerPlayFlash(playSound: false)
-            }
-            Button("Testar Flash de Borda Vermelho (1s)") {
-                ScreenFlashController.triggerOvertimeFlash(playSound: false)
-            }
-        }
-
-        Divider()
-
-        Button("⌨️ Atalho Global: ⌥ + F") {}
-            .disabled(true)
-
-        Button("📝 Abrir/Fechar Anotações") {
-            model.toggleSideNotes()
-        }
-
-        Button("🎯 Abrir no Super Productivity") {
-            model.clickTask()
-            SuperProductivityLauncher.activateSuperProductivity()
-        }
-    }
+    // MARK: - Status Helpers
 
     // MARK: - Status Helpers
     private var statusIndicator: some View {
@@ -609,10 +452,7 @@ struct FocoDSPillView: View {
         if model.isTracking {
             if model.hasEstimate {
                 if model.isOvertime {
-                    let overtimeSec = max(0, Int((model.timeSpentMs - model.timeEstimateMs) / 1000))
-                    let m = overtimeSec / 60
-                    let s = overtimeSec % 60
-                    let overtimeStr = m > 0 ? "+\(m)m" : "+\(s)s"
+                    let overtimeStr = model.formattedOvertimeOnly.isEmpty ? "+1s" : model.formattedOvertimeOnly
                     return "Tempo Excedido • \(overtimeStr)"
                 } else {
                     let pct = Int(model.progress * 100)
@@ -866,5 +706,12 @@ final class DragClickNSView: NSView {
         }
         initialMouseDownLocation = nil
         hasMoved = false
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        if let hosting = window?.contentView as? FocoDSPillHostingView {
+            return hosting.menu(for: event)
+        }
+        return super.menu(for: event)
     }
 }

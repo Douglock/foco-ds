@@ -9,6 +9,7 @@ final class ScreenFlashController {
 
     /// Flash screen edges in Green when Play is pressed on a task
     static func triggerPlayFlash(playSound: Bool = true) {
+        guard !AppDelegate.isMenuOpen else { return }
         guard Date().timeIntervalSince(lastPlayFlashTime) > 0.8 else { return }
         lastPlayFlashTime = Date()
 
@@ -22,7 +23,8 @@ final class ScreenFlashController {
 
     /// Flash screen edges in Red when time estimate is reached / exceeded or focus finished
     static func triggerOvertimeFlash(playSound: Bool = true) {
-        guard Date().timeIntervalSince(lastAlertTime) > 2.0 else { return }
+        guard !AppDelegate.isMenuOpen else { return }
+        guard Date().timeIntervalSince(lastAlertTime) > 15.0 else { return }
         lastAlertTime = Date()
 
         if playSound {
@@ -53,6 +55,7 @@ final class ScreenFlashController {
 
     /// Edge Glow: Glows only along the 4 borders of the screen with smooth fade out
     static func flashScreenEdges(color: NSColor, duration: TimeInterval = 1.0) {
+        guard !AppDelegate.isMenuOpen else { return }
         let screens = NSScreen.screens
         guard !screens.isEmpty else { return }
 

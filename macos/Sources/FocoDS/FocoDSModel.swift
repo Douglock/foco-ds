@@ -117,6 +117,7 @@ final class FocoDSModel: ObservableObject {
     private var previousIsBreak: Bool = false
     private var previousRemaining: Int64 = 0
     private var hasAlertedOvertimeTaskId: String? = nil
+    private var alertedOvertimeTaskKeys = Set<String>()
     private var saveDebounceWorkItem: DispatchWorkItem?
 
     init() {
@@ -140,7 +141,7 @@ final class FocoDSModel: ObservableObject {
             self.isNotchSnapped = savedNotch
         }
 
-        self.visualStyle = UserDefaults.standard.string(forKey: "foco_ds_visual_style") ?? "lateral"
+        self.visualStyle = UserDefaults.standard.string(forKey: "foco_ds_visual_style") ?? "classic"
         self.dockSide = UserDefaults.standard.string(forKey: "foco_ds_dock_side") ?? "right"
 
         if let savedAudio = UserDefaults.standard.object(forKey: "foco_ds_play_audio") as? Bool {
@@ -160,17 +161,16 @@ final class FocoDSModel: ObservableObject {
                         self.isIdleReminderActive = false
                     }
 
-                    // Check if estimate was just exceeded
-                    if self.hasEstimate && self.isOvertime && self.hasAlertedOvertimeTaskId != self.taskId {
+                    // Check if estimate was just exceeded (ONLY ONCE per task)
+                    let taskKey = "\(self.taskId ?? self.taskTitle)_\(self.timeEstimateMs)"
+                    if self.hasEstimate && self.isOvertime && !self.alertedOvertimeTaskKeys.contains(taskKey) {
+                        self.alertedOvertimeTaskKeys.insert(taskKey)
                         self.hasAlertedOvertimeTaskId = self.taskId
                         self.triggerOvertimeAlert()
                     }
 
                     if self.remainingSeconds > 0 {
                         self.remainingSeconds -= 1
-                        if self.remainingSeconds == 0 {
-                            self.triggerOvertimeAlert()
-                        }
                     }
                 } else if !self.isBreak {
                     self.secondsSinceLastFocus += 1
@@ -308,8 +308,10 @@ final class FocoDSModel: ObservableObject {
         self.taskId = taskId
         self.lastUpdated = Date()
 
+        let taskKey = "\(taskId ?? cleanTitle)_\(timeEstimateMs)"
         if taskChanged {
             self.hasAlertedOvertimeTaskId = nil
+            self.alertedOvertimeTaskKeys.removeAll()
         }
 
         if let incomingHabits = habits, !incomingHabits.isEmpty {
@@ -328,12 +330,16 @@ final class FocoDSModel: ObservableObject {
             ScreenFlashController.triggerPlayFlash(playSound: playAudioOnStart)
         }
 
-        // 2. Trigger Red Screen Flash when estimate is exceeded or focus finished
-        if triggerOvertimeFlash || forceFinishedAlert || (!previousIsBreak && isBreak) {
-            triggerOvertimeAlert()
-        } else if self.hasEstimate && self.isOvertime && self.hasAlertedOvertimeTaskId != self.taskId {
-            self.hasAlertedOvertimeTaskId = self.taskId
-            triggerOvertimeAlert()
+        // 2. Trigger Red Screen Flash when estimate is exceeded or focus finished (ONLY ONCE per task!)
+        if !alertedOvertimeTaskKeys.contains(taskKey) {
+            if triggerOvertimeFlash || forceFinishedAlert || (!previousIsBreak && isBreak) {
+                alertedOvertimeTaskKeys.insert(taskKey)
+                triggerOvertimeAlert()
+            } else if self.hasEstimate && self.isOvertime {
+                alertedOvertimeTaskKeys.insert(taskKey)
+                self.hasAlertedOvertimeTaskId = self.taskId
+                triggerOvertimeAlert()
+            }
         }
 
         self.previousIsTracking = newlyTracking
@@ -344,17 +350,28 @@ final class FocoDSModel: ObservableObject {
     func triggerOvertimeAlert() {
         ScreenFlashController.triggerOvertimeFlash()
 
-        // Flash pill border with warning pulse
-        withAnimation(.easeInOut(duration: 0.15).repeatCount(4, autoreverses: true)) {
+        // Flash pill border with gentle warning pulse ONCE
+        withAnimation(.easeInOut(duration: 0.2).repeatCount(2, autoreverses: true)) {
             self.isPillFlashing = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             self.isPillFlashing = false
         }
     }
 
     func triggerFinishedAlert() {
         triggerOvertimeAlert()
+    }
+
+    func autoFitTitleWidth() {
+        guard !taskTitle.isEmpty else { return }
+        if isCompactCircle {
+            isCompactCircle = false
+        }
+        let titleLen = CGFloat(taskTitle.count)
+        let needed = max(420, min(800, titleLen * 8.5 + 290))
+        setPillWidth(needed)
+        UserDefaults.standard.set(Double(needed), forKey: "foco_ds_pill_width")
     }
 
     func toggleSideNotes() {
@@ -430,7 +447,7 @@ final class FocoDSModel: ObservableObject {
         return remainingMs / 1000
     }
 
-    // Formatted remaining time when estimate exists (counts down: 15:00 -> 14:59...)
+    // Formatted remaining time when estimate exists (counts down: 15:00 -> 14:59... e quando excede mostra o tempo total decorrido: +16:33)
     var formattedCountdown: String {
         let remainingMs = timeEstimateMs - timeSpentMs
         if remainingMs >= 0 {
@@ -444,15 +461,37 @@ final class FocoDSModel: ObservableObject {
                 return String(format: "%02d:%02d", minutes, seconds)
             }
         } else {
-            let overtimeSec = Int(abs(remainingMs) / 1000)
-            let hours = overtimeSec / 3600
-            let minutes = (overtimeSec % 3600) / 60
-            let seconds = overtimeSec % 60
+            // Tempo total que está rodando com indicador de tempo excedido (+)
+            // Exemplo: Tarefa de 15m rodando há 16m33s exibe "+16:33"
+            let totalSpentSec = Int(timeSpentMs / 1000)
+            let hours = totalSpentSec / 3600
+            let minutes = (totalSpentSec % 3600) / 60
+            let seconds = totalSpentSec % 60
             if hours > 0 {
                 return String(format: "+%02d:%02d:%02d", hours, minutes, seconds)
             } else {
                 return String(format: "+%02d:%02d", minutes, seconds)
             }
+        }
+    }
+
+    var overtimeSeconds: Int {
+        guard timeSpentMs > timeEstimateMs && timeEstimateMs > 0 else { return 0 }
+        return Int((timeSpentMs - timeEstimateMs) / 1000)
+    }
+
+    var formattedOvertimeOnly: String {
+        let sec = overtimeSeconds
+        guard sec > 0 else { return "" }
+        let h = sec / 3600
+        let m = (sec % 3600) / 60
+        let s = sec % 60
+        if h > 0 {
+            return String(format: "+%dh %02dm", h, m)
+        } else if m > 0 {
+            return String(format: "+%dm %02ds", m, s)
+        } else {
+            return "+\(s)s"
         }
     }
 

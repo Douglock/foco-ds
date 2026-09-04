@@ -174,6 +174,7 @@ final class FocoDSBridge {
                 do {
                     struct StatePayload: Decodable {
                         let isTracking: Bool?
+                        let isPaused: Bool?
                         let taskTitle: String?
                         let timeSpentMs: Int64?
                         let timeEstimateMs: Int64?
@@ -193,6 +194,7 @@ final class FocoDSBridge {
                     DispatchQueue.main.async { [weak self] in
                         self?.model?.update(
                             isTracking: payload.isTracking ?? false,
+                            isPaused: payload.isPaused ?? false,
                             taskTitle: payload.taskTitle ?? "",
                             timeSpentMs: payload.timeSpentMs ?? 0,
                             timeEstimateMs: payload.timeEstimateMs ?? 0,

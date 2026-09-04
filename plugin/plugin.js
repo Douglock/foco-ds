@@ -227,13 +227,17 @@ async function syncState() {
     previousIsBreak = isBreak;
     previousRemaining = remainingSeconds;
 
+    // Detect Paused Task (active task exists in Super Productivity, but tracking is halted)
+    const isPaused = Boolean(activeTask && !isTracking && !isBreak);
+
     // Prepare payload
-    const title = isTracking && activeTask?.title ? String(activeTask.title) : "";
-    const taskId = isTracking && activeTask?.id ? String(activeTask.id) : null;
+    const title = activeTask?.title ? String(activeTask.title) : "";
+    const taskId = activeTask?.id ? String(activeTask.id) : null;
     const taskNotes = String(activeTask?.notes || "");
 
     const payload = {
       isTracking,
+      isPaused,
       taskTitle: title,
       timeSpentMs,
       timeEstimateMs,
@@ -289,6 +293,33 @@ async function syncState() {
                   task: { id: cmd.taskId, changes: { timeEstimate: newEst } }
                 });
               }
+            } else if (cmd.type === "create_task" && cmd.title) {
+              const taskTitle = String(cmd.title).trim();
+              const estimate = Number(cmd.timeEstimateMs || 0);
+              if (typeof PluginAPI.addTask === "function") {
+                try {
+                  const created = await PluginAPI.addTask(taskTitle, { timeEstimate: estimate });
+                  if (created && created.id) {
+                    state.activeTaskId = String(created.id);
+                    state.running = true;
+                    if (typeof PluginAPI.dispatchAction === "function") {
+                      PluginAPI.dispatchAction({ type: "[Task] SetCurrentTask", id: created.id });
+                      PluginAPI.dispatchAction({ type: "[Task] SelectTask", id: created.id });
+                    }
+                  }
+                } catch (e) {}
+              } else if (typeof PluginAPI.dispatchAction === "function") {
+                const autoId = "task_" + Date.now();
+                PluginAPI.dispatchAction({
+                  type: "[Task] AddTaskWithDefaults",
+                  task: { id: autoId, title: taskTitle, timeEstimate: estimate },
+                  isAddToBacklog: false
+                });
+                state.activeTaskId = autoId;
+                state.running = true;
+                PluginAPI.dispatchAction({ type: "[Task] SetCurrentTask", id: autoId });
+              }
+              setTimeout(syncState, 50);
             } else if (cmd.type === "increment_habit" && cmd.habitId) {
               if (typeof PluginAPI.incrementCounter === "function") {
                 await PluginAPI.incrementCounter(cmd.habitId, 1);

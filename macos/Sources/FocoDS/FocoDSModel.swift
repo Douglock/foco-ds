@@ -37,14 +37,42 @@ final class FocoDSModel: ObservableObject {
     @Published var notesText: String = ""
     @Published var isEditingNotes: Bool = false
 
-    // Visual Flash Pulse on Pill
+    @Published var isPaused: Bool = false
     @Published var isPillFlashing: Bool = false
+
+    // Resizing & Compact Circle State
+    @Published var pillWidth: CGFloat = 480 {
+        didSet {
+            UserDefaults.standard.set(Double(pillWidth), forKey: "foco_ds_pill_width")
+            onWindowRepositionRequested?()
+        }
+    }
+    @Published var isCompactCircle: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isCompactCircle, forKey: "foco_ds_compact_circle")
+            onWindowRepositionRequested?()
+        }
+    }
+
+    // Inactivity / Idle Reminder (Aviso sutil na Island quando muito tempo sem focar)
+    @Published var isIdleReminderActive: Bool = false
+    @Published var idleReminderThresholdMinutes: Int = 15
+    @Published var idleMinutesWithoutFocus: Int = 0
+    private var secondsSinceLastFocus: Int = 0
 
     // User Preferences (Persisted)
     @Published var pillOpacity: Double = 0.88
     @Published var isNotchSnapped: Bool = true
-    @Published var visualStyle: String = "classic" // "classic" or "circular"
+    @Published var visualStyle: String = "lateral" // "lateral" (Side Dock com Anéis) or "classic" (HUD Topo)
+    @Published var dockSide: String = "right" // "right" or "left"
     @Published var playAudioOnStart: Bool = true
+
+    // Task Creation Card State
+    @Published var showTaskCreateCard: Bool = false {
+        didSet {
+            onWindowRepositionRequested?()
+        }
+    }
 
     // Callbacks to send commands to Super Productivity & Window Manager
     var onNotesSaved: ((_ taskId: String, _ notes: String) -> Void)?
@@ -52,6 +80,7 @@ final class FocoDSModel: ObservableObject {
     var onHabitClicked: ((_ habitId: String) -> Void)?
     var onTaskClicked: ((_ taskId: String?) -> Void)?
     var onUpdateEstimate: ((_ taskId: String, _ estimateMs: Int64) -> Void)?
+    var onCreateTask: ((_ title: String, _ estimateMs: Int64) -> Void)?
     var onWindowRepositionRequested: (() -> Void)?
 
     private var timerCancellable: AnyCancellable?
@@ -68,11 +97,22 @@ final class FocoDSModel: ObservableObject {
         let savedOpacity = UserDefaults.standard.double(forKey: "foco_ds_opacity")
         self.pillOpacity = savedOpacity > 0.1 ? savedOpacity : 0.88
 
+        let savedWidth = UserDefaults.standard.double(forKey: "foco_ds_pill_width")
+        self.pillWidth = savedWidth >= 200 ? CGFloat(savedWidth) : 480
+
+        if let savedCompact = UserDefaults.standard.object(forKey: "foco_ds_compact_circle") as? Bool {
+            self.isCompactCircle = savedCompact
+        }
+
+        let savedIdle = UserDefaults.standard.integer(forKey: "foco_ds_idle_threshold")
+        self.idleReminderThresholdMinutes = savedIdle > 0 ? savedIdle : 15
+
         if let savedNotch = UserDefaults.standard.object(forKey: "foco_ds_notch_snapped") as? Bool {
             self.isNotchSnapped = savedNotch
         }
 
-        self.visualStyle = UserDefaults.standard.string(forKey: "foco_ds_visual_style") ?? "classic"
+        self.visualStyle = UserDefaults.standard.string(forKey: "foco_ds_visual_style") ?? "lateral"
+        self.dockSide = UserDefaults.standard.string(forKey: "foco_ds_dock_side") ?? "right"
 
         if let savedAudio = UserDefaults.standard.object(forKey: "foco_ds_play_audio") as? Bool {
             self.playAudioOnStart = savedAudio
@@ -82,19 +122,35 @@ final class FocoDSModel: ObservableObject {
         timerCancellable = Timer.publish(every: 1.0, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                guard let self = self, self.isTracking else { return }
-                self.timeSpentMs += 1000
+                guard let self = self else { return }
 
-                // Check if estimate was just exceeded
-                if self.hasEstimate && self.isOvertime && self.hasAlertedOvertimeTaskId != self.taskId {
-                    self.hasAlertedOvertimeTaskId = self.taskId
-                    self.triggerOvertimeAlert()
-                }
+                if self.isTracking {
+                    self.timeSpentMs += 1000
+                    self.secondsSinceLastFocus = 0
+                    if self.isIdleReminderActive {
+                        self.isIdleReminderActive = false
+                    }
 
-                if self.remainingSeconds > 0 {
-                    self.remainingSeconds -= 1
-                    if self.remainingSeconds == 0 {
+                    // Check if estimate was just exceeded
+                    if self.hasEstimate && self.isOvertime && self.hasAlertedOvertimeTaskId != self.taskId {
+                        self.hasAlertedOvertimeTaskId = self.taskId
                         self.triggerOvertimeAlert()
+                    }
+
+                    if self.remainingSeconds > 0 {
+                        self.remainingSeconds -= 1
+                        if self.remainingSeconds == 0 {
+                            self.triggerOvertimeAlert()
+                        }
+                    }
+                } else if !self.isBreak {
+                    self.secondsSinceLastFocus += 1
+                    let idleMins = self.secondsSinceLastFocus / 60
+                    self.idleMinutesWithoutFocus = idleMins
+                    if self.idleReminderThresholdMinutes > 0 && idleMins >= self.idleReminderThresholdMinutes {
+                        if !self.isIdleReminderActive {
+                            self.isIdleReminderActive = true
+                        }
                     }
                 }
             }
@@ -115,6 +171,37 @@ final class FocoDSModel: ObservableObject {
     func setVisualStyle(_ style: String) {
         self.visualStyle = style
         UserDefaults.standard.set(style, forKey: "foco_ds_visual_style")
+        onWindowRepositionRequested?()
+    }
+
+    func setDockSide(_ side: String) {
+        self.dockSide = side
+        UserDefaults.standard.set(side, forKey: "foco_ds_dock_side")
+        onWindowRepositionRequested?()
+    }
+
+    func toggleTaskCreateCard() {
+        self.showTaskCreateCard.toggle()
+        onWindowRepositionRequested?()
+    }
+
+    func createNewTask(title: String, estimateMinutes: Int) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { return }
+
+        let estimateMs = Int64(estimateMinutes * 60 * 1000)
+        self.taskTitle = cleanTitle
+        self.timeSpentMs = 0
+        self.timeEstimateMs = estimateMs
+        self.isTracking = true
+        self.showTaskCreateCard = false
+
+        // Flash and audio feedback
+        ScreenFlashController.triggerPlayFlash(playSound: playAudioOnStart)
+
+        // Dispatch command to Super Productivity
+        onCreateTask?(cleanTitle, estimateMs)
+        onWindowRepositionRequested?()
     }
 
     func togglePlayAudio() {
@@ -126,12 +213,36 @@ final class FocoDSModel: ObservableObject {
         return timeEstimateMs > 0
     }
 
+    func toggleCompactCircle() {
+        self.isCompactCircle.toggle()
+    }
+
+    func setPillWidth(_ width: CGFloat) {
+        let clamped = max(260, min(800, width))
+        self.pillWidth = clamped
+        if self.isCompactCircle {
+            self.isCompactCircle = false
+        }
+    }
+
+    func setIdleReminderMinutes(_ minutes: Int) {
+        self.idleReminderThresholdMinutes = minutes
+        UserDefaults.standard.set(minutes, forKey: "foco_ds_idle_threshold")
+    }
+
     var isOvertime: Bool {
         return hasEstimate && timeSpentMs >= timeEstimateMs
     }
 
+    func resumeCurrentTask() {
+        if let tid = taskId, !tid.isEmpty {
+            onTaskClicked?(tid)
+        }
+    }
+
     func update(
         isTracking: Bool,
+        isPaused: Bool = false,
         taskTitle: String,
         timeSpentMs: Int64,
         timeEstimateMs: Int64 = 0,
@@ -152,6 +263,11 @@ final class FocoDSModel: ObservableObject {
 
         self.isConnected = true
         self.isTracking = newlyTracking
+        self.isPaused = isPaused
+        if newlyTracking {
+            self.secondsSinceLastFocus = 0
+            self.isIdleReminderActive = false
+        }
         self.taskTitle = cleanTitle
         self.timeSpentMs = max(0, timeSpentMs)
         self.timeEstimateMs = max(0, timeEstimateMs)
@@ -278,6 +394,11 @@ final class FocoDSModel: ObservableObject {
         } else {
             return "\(mins)m"
         }
+    }
+
+    var remainingEstimateSeconds: Int64 {
+        let remainingMs = timeEstimateMs - timeSpentMs
+        return remainingMs / 1000
     }
 
     // Formatted remaining time when estimate exists (counts down: 15:00 -> 14:59...)

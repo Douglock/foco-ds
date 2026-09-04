@@ -8,7 +8,11 @@ struct FocoDSPillView: View {
 
     var body: some View {
         Group {
-            if model.visualStyle == "circular" {
+            if model.visualStyle == "lateral" {
+                LateralDockView(model: model)
+            } else if model.isCompactCircle {
+                compactCircleView
+            } else if model.visualStyle == "circular" {
                 circularGaugeContainer
             } else {
                 classicPillContainer
@@ -19,25 +23,118 @@ struct FocoDSPillView: View {
         }
     }
 
-    // MARK: - Estilo 1: Pílula Clássica HUD
-    private var classicPillContainer: some View {
-        Group {
-            if model.isTracking && !model.taskTitle.isEmpty {
-                classicActiveTaskView
+    // MARK: - Modo 1: Círculo Compacto ("Diminuir até o ponto de ver apenas o círculo")
+    private var compactCircleView: some View {
+        Button(action: {
+            if model.isPaused {
+                model.resumeCurrentTask()
             } else {
-                classicHabitsView
+                model.toggleCompactCircle()
+            }
+        }) {
+            ZStack {
+                // Background dark disc
+                Circle()
+                    .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(model.pillOpacity))
+                    .frame(width: 38, height: 38)
+
+                // Idle Reminder Breathing Glow
+                if model.isIdleReminderActive {
+                    Circle()
+                        .stroke(Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.7), lineWidth: 2)
+                        .scaleEffect(1.12)
+                }
+
+                // Tracking Active: Glowing circular ring around icon
+                if model.isTracking {
+                    Circle()
+                        .stroke(Color.white.opacity(0.12), lineWidth: 2.8)
+                        .frame(width: 32, height: 32)
+
+                    Circle()
+                        .trim(from: 0, to: max(0.04, min(1.0, model.progress)))
+                        .stroke(
+                            statusColor,
+                            style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 32, height: 32)
+                        .animation(.easeInOut(duration: 0.3), value: model.progress)
+
+                    ClaudeStarburst(size: 13, color: .white)
+                } else if model.isPaused {
+                    // Paused State: Amber pause ring
+                    Circle()
+                        .stroke(Color(red: 255/255, green: 180/255, blue: 0/255), lineWidth: 2.2)
+                        .frame(width: 32, height: 32)
+
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color(red: 255/255, green: 180/255, blue: 0/255))
+                } else {
+                    // Idle / Habits State
+                    Circle()
+                        .stroke(Color.white.opacity(0.15), lineWidth: 2.0)
+                        .frame(width: 30, height: 30)
+
+                    Text(model.isIdleReminderActive ? "⚡" : "🎯")
+                        .font(.system(size: 13))
+                }
+            }
+            .frame(width: 42, height: 40)
+        }
+        .buttonStyle(.plain)
+        .overlay(
+            Circle()
+                .stroke(borderStrokeColor, lineWidth: 1.0)
+        )
+        .help(compactTooltipText)
+    }
+
+    private var compactTooltipText: String {
+        if model.isTracking {
+            return "\(model.taskTitle) (\(model.formattedTime)) • Clique para expandir"
+        }
+        if model.isPaused {
+            return "Pausado: \(model.taskTitle) (\(model.formattedTime)) • Clique para retomar"
+        }
+        if model.isIdleReminderActive {
+            return "⚡ \(model.idleMinutesWithoutFocus)m sem foco • Clique para expandir"
+        }
+        return "Foco DS • Clique para expandir"
+    }
+
+    // MARK: - Modo 2: Pílula Clássica HUD (Largura Ajustável)
+    private var classicPillContainer: some View {
+        HStack(spacing: 0) {
+            // Alça de Redimensionamento Esquerda
+            if isHovering {
+                resizeHandle(isLeft: true)
+            }
+
+            Group {
+                if (model.isTracking || model.isPaused) && !model.taskTitle.isEmpty {
+                    classicActiveTaskView
+                } else {
+                    classicHabitsView
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            // Alça de Redimensionamento Direita
+            if isHovering {
+                resizeHandle(isLeft: false)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
         .background(
             ZStack(alignment: .leading) {
                 // Fundo Escuro com Opacidade Regulável
                 Capsule()
                     .fill(Color(red: 16/255, green: 22/255, blue: 34/255).opacity(model.pillOpacity))
 
-                // Barra de Progresso Suave
-                if model.isTracking {
+                // Barra de Progresso Suave (Tracking verde / Pausado âmbar)
+                if model.isTracking || model.isPaused {
                     GeometryReader { geo in
                         Capsule()
                             .fill(
@@ -65,41 +162,171 @@ struct FocoDSPillView: View {
         }
     }
 
-    // MARK: - Estilo 2: Anéis Circulares (Inspirado no anexo)
+    // Alça de Redimensionamento Interativo (Arrastar pros lados para aumentar/diminuir)
+    private func resizeHandle(isLeft: Bool) -> some View {
+        ZStack {
+            Capsule()
+                .fill(Color.white.opacity(0.25))
+                .frame(width: 3.5, height: 16)
+        }
+        .frame(width: 10, height: 28)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    let delta = isLeft ? -value.translation.width : value.translation.width
+                    let candidate = model.pillWidth + delta * 0.8
+                    if candidate < 120 {
+                        model.isCompactCircle = true
+                    } else {
+                        model.setPillWidth(candidate)
+                    }
+                }
+        )
+        .help("Arraste para aumentar ou diminuir a largura da pílula")
+    }
+
+    // MARK: - Classic Active Task View (Suporta todo título e tempo estimado sem cortes)
+    private var classicActiveTaskView: some View {
+        HStack(spacing: 9) {
+            HStack(spacing: 9) {
+                statusIndicator
+
+                // Título e Subtítulo (Espaço flexível para ver todo o título)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.taskTitle)
+                        .font(.system(size: 12.5, weight: .semibold, design: .default))
+                        .foregroundColor(.white.opacity(0.95))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
+
+                    Text(statusSubtitle)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(statusColor.opacity(0.88))
+                }
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 1, height: 14)
+
+                // Tempo e Estimativa formatados (fixedSize garante que NUNCA será cortado!)
+                Text(model.formattedTime)
+                    .font(.system(size: 12.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(timerColor)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .contentShape(Rectangle())
+            .overlay(
+                NativeDragAndClickHandler(onClick: {
+                    if model.isPaused {
+                        model.resumeCurrentTask()
+                    } else {
+                        model.clickTask()
+                        SuperProductivityLauncher.activateSuperProductivity()
+                    }
+                })
+            )
+
+            // Minimalist Note Button (📝)
+            Button(action: {
+                model.toggleSideNotes()
+            }) {
+                ZStack(alignment: .topTrailing) {
+                    Text("📝")
+                        .font(.system(size: 12))
+                        .padding(5)
+                        .background(model.isSideNotesOpen ? Color.white.opacity(0.24) : Color.white.opacity(0.08))
+                        .cornerRadius(6)
+
+                    if !model.notesText.isEmpty {
+                        Circle()
+                            .fill(Color(red: 16/255, green: 185/255, blue: 129/255))
+                            .frame(width: 5, height: 5)
+                            .offset(x: 2, y: -2)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Anotações da Tarefa (Clique para abrir/fechar)")
+        }
+    }
+
+    // MARK: - Classic Habits View
+    private var classicHabitsView: some View {
+        HStack(spacing: 12) {
+            Button(action: {
+                model.toggleCompactCircle()
+            }) {
+                Circle()
+                    .fill(model.isIdleReminderActive ? Color(red: 255/255, green: 180/255, blue: 0/255) : Color.white.opacity(0.35))
+                    .frame(width: 8, height: 8)
+            }
+            .buttonStyle(.plain)
+            .help("Clique para alternar para Círculo")
+
+            if model.isIdleReminderActive {
+                Text("⚡ \(model.idleMinutesWithoutFocus)m sem foco • Clique para iniciar")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(red: 255/255, green: 195/255, blue: 70/255))
+                    .onTapGesture {
+                        model.toggleTaskCreateCard()
+                    }
+            } else {
+                ForEach(model.habits) { habit in
+                    HabitButton(habit: habit) {
+                        NSSound(named: "Tink")?.play()
+                        model.clickHabit(habit)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+        .overlay(
+            NativeDragAndClickHandler(onClick: {
+                SuperProductivityLauncher.activateSuperProductivity()
+            })
+        )
+    }
+
+    // MARK: - Estilo 2: Anéis Horizontais
     private var circularGaugeContainer: some View {
         HStack(spacing: 11) {
-            if model.isTracking && !model.taskTitle.isEmpty {
-                // Active Task Gauge with ring & percentage
+            if (model.isTracking || model.isPaused) && !model.taskTitle.isEmpty {
                 CircularItemGauge(
-                    icon: "🎯",
+                    icon: model.isPaused ? "⏸" : "🎯",
                     progress: model.progress,
                     color: statusColor,
                     percentageText: "\(Int(model.progress * 100))%",
                     tooltipTitle: model.taskTitle,
                     tooltipSubtitle: model.formattedTime
                 ) {
-                    model.clickTask()
-                    SuperProductivityLauncher.activateSuperProductivity()
+                    if model.isPaused {
+                        model.resumeCurrentTask()
+                    } else {
+                        model.clickTask()
+                        SuperProductivityLauncher.activateSuperProductivity()
+                    }
                 }
 
-                // Compact Title and Countdown Time
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.taskTitle)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white.opacity(0.95))
                         .lineLimit(1)
-                        .frame(maxWidth: 140, alignment: .leading)
+                        .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
 
                     Text(model.formattedTime)
                         .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                         .foregroundColor(timerColor)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Rectangle()
                     .fill(Color.white.opacity(0.12))
                     .frame(width: 1, height: 16)
 
-                // Notes Button
                 Button(action: { model.toggleSideNotes() }) {
                     ZStack(alignment: .topTrailing) {
                         Text("📝")
@@ -107,23 +334,13 @@ struct FocoDSPillView: View {
                             .padding(4)
                             .background(model.isSideNotesOpen ? Color.white.opacity(0.24) : Color.white.opacity(0.08))
                             .clipShape(Circle())
-
-                        if !model.notesText.isEmpty {
-                            Circle()
-                                .fill(Color(red: 16/255, green: 185/255, blue: 129/255))
-                                .frame(width: 5, height: 5)
-                                .offset(x: 2, y: -2)
-                        }
                     }
                 }
                 .buttonStyle(.plain)
-
             } else {
-                // Circular Habits Gauges (with circular ring and percentage)
                 ForEach(model.habits) { habit in
                     let count = habit.count ?? 0
-                    let target = 5.0
-                    let pct = min(1.0, Double(count) / target)
+                    let pct = min(1.0, Double(count) / 5.0)
                     let pctInt = Int(pct * 100)
 
                     CircularItemGauge(
@@ -151,118 +368,97 @@ struct FocoDSPillView: View {
                     .stroke(borderStrokeColor, lineWidth: 1.0)
             }
         )
-        .overlay(
-            NativeDragAndClickHandler(onClick: {
-                if model.isTracking {
-                    model.clickTask()
-                }
-                SuperProductivityLauncher.activateSuperProductivity()
-            })
-        )
     }
 
-    // MARK: - Classic Active Task View
-    private var classicActiveTaskView: some View {
-        HStack(spacing: 9) {
-            HStack(spacing: 9) {
-                statusIndicator
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.taskTitle)
-                        .font(.system(size: 12.5, weight: .semibold, design: .default))
-                        .foregroundColor(.white.opacity(0.95))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: 200, alignment: .leading)
-
-                    Text(statusSubtitle)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(statusColor.opacity(0.85))
-                }
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 1, height: 14)
-
-                Text(model.formattedTime)
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundColor(timerColor)
-            }
-            .contentShape(Rectangle())
-            .overlay(
-                NativeDragAndClickHandler(onClick: {
-                    model.clickTask()
-                    SuperProductivityLauncher.activateSuperProductivity()
-                })
-            )
-
-            // Minimalist Note Button
-            Button(action: {
-                model.toggleSideNotes()
-            }) {
-                ZStack(alignment: .topTrailing) {
-                    Text("📝")
-                        .font(.system(size: 12))
-                        .padding(5)
-                        .background(model.isSideNotesOpen ? Color.white.opacity(0.24) : Color.white.opacity(0.08))
-                        .cornerRadius(6)
-
-                    if !model.notesText.isEmpty {
-                        Circle()
-                            .fill(Color(red: 16/255, green: 185/255, blue: 129/255))
-                            .frame(width: 5, height: 5)
-                            .offset(x: 2, y: -2)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .help("Anotações da Tarefa (Clique para abrir/fechar)")
-        }
-    }
-
-    // MARK: - Classic Habits View
-    private var classicHabitsView: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(Color.white.opacity(0.35))
-                .frame(width: 6, height: 6)
-
-            ForEach(model.habits) { habit in
-                HabitButton(habit: habit) {
-                    NSSound(named: "Tink")?.play()
-                    model.clickHabit(habit)
-                }
-            }
-        }
-        .padding(.horizontal, 4)
-        .contentShape(Rectangle())
-        .overlay(
-            NativeDragAndClickHandler(onClick: {
-                SuperProductivityLauncher.activateSuperProductivity()
-            })
-        )
-    }
-
-    // MARK: - Right Click Context Menu (Todas as Configurações)
+    // MARK: - Right Click Context Menu (Configurações Completas)
     @ViewBuilder
     private var focoDSContextMenu: some View {
-        // Encaixe Magnético no Notch
-        Menu("🧲 Encaixe na Tela") {
-            Button(model.isNotchSnapped ? "✓ Encaixe Magnético no Notch" : "Encaixe Magnético no Notch") {
-                if !model.isNotchSnapped { model.toggleNotchSnap() }
-            }
-            Button(!model.isNotchSnapped ? "✓ Flutuação Livre (Arrastável)" : "Flutuação Livre (Arrastável)") {
-                if model.isNotchSnapped { model.toggleNotchSnap() }
+        Button("➕ Criar Nova Tarefa de Foco...") {
+            model.toggleTaskCreateCard()
+        }
+
+        if model.isPaused {
+            Button("▶️ Retomar Foco na Tarefa Atual") {
+                model.resumeCurrentTask()
             }
         }
 
-        // Estilo Visual (Pílula vs Anéis Circulares)
+        Divider()
+
+        // Alternar Círculo vs Pílula
+        Button(model.isCompactCircle ? "↔️ Expandir para Pílula Completa" : "⭕ Diminuir até Apenas o Círculo") {
+            model.toggleCompactCircle()
+        }
+
+        // Largura da Pílula (Aumentar e Diminuir pros Lados)
+        Menu("📏 Largura da Pílula") {
+            Button("⭕ Apenas o Círculo (Compacto)") {
+                model.isCompactCircle = true
+            }
+            Divider()
+            Button(model.pillWidth == 340 && !model.isCompactCircle ? "✓ Compacto (340px)" : "Compacto (340px)") {
+                model.setPillWidth(340)
+            }
+            Button(model.pillWidth == 480 && !model.isCompactCircle ? "✓ Padrão (480px)" : "Padrão (480px)") {
+                model.setPillWidth(480)
+            }
+            Button(model.pillWidth == 580 && !model.isCompactCircle ? "✓ Amplo - Ver Todo Título e Tempo (580px)" : "Amplo - Ver Todo Título e Tempo (580px)") {
+                model.setPillWidth(580)
+            }
+            Button(model.pillWidth == 700 && !model.isCompactCircle ? "✓ Máximo (700px)" : "Máximo (700px)") {
+                model.setPillWidth(700)
+            }
+        }
+
+        // Lembrete de Inatividade (Aviso sutil na Island se muito tempo sem focar)
+        Menu("⏰ Aviso de Inatividade") {
+            Button(model.idleReminderThresholdMinutes == 10 ? "✓ 10 minutos sem foco" : "10 minutos sem foco") {
+                model.setIdleReminderMinutes(10)
+            }
+            Button(model.idleReminderThresholdMinutes == 15 ? "✓ 15 minutos sem foco (Padrão)" : "15 minutos sem foco (Padrão)") {
+                model.setIdleReminderMinutes(15)
+            }
+            Button(model.idleReminderThresholdMinutes == 30 ? "✓ 30 minutos sem foco" : "30 minutos sem foco") {
+                model.setIdleReminderMinutes(30)
+            }
+            Button(model.idleReminderThresholdMinutes == 0 ? "✓ Desativado" : "Desativado") {
+                model.setIdleReminderMinutes(0)
+            }
+        }
+
+        Divider()
+
+        // Estilo Visual (Dock Lateral vs Pílula Topo)
         Menu("🎨 Estilo Visual") {
-            Button(model.visualStyle == "classic" ? "✓ Pílula HUD Moderna" : "Pílula HUD Moderna") {
+            Button(model.visualStyle == "lateral" ? "✓ Dock Lateral com Anéis (Colado na Lateral)" : "Dock Lateral com Anéis (Colado na Lateral)") {
+                model.setVisualStyle("lateral")
+            }
+            Button(model.visualStyle == "classic" ? "✓ Pílula HUD Superior (Notch)" : "Pílula HUD Superior (Notch)") {
                 model.setVisualStyle("classic")
             }
-            Button(model.visualStyle == "circular" ? "✓ Anéis Circulares (Estilo Anexo)" : "Anéis Circulares (Estilo Anexo)") {
+            Button(model.visualStyle == "circular" ? "✓ Anéis Horizontais" : "Anéis Horizontais") {
                 model.setVisualStyle("circular")
+            }
+        }
+
+        // Posição na Lateral
+        if model.visualStyle == "lateral" {
+            Menu("📱 Lado da Tela") {
+                Button(model.dockSide == "right" ? "✓ Lateral Direita" : "Lateral Direita") {
+                    model.setDockSide("right")
+                }
+                Button(model.dockSide == "left" ? "✓ Lateral Esquerda" : "Lateral Esquerda") {
+                    model.setDockSide("left")
+                }
+            }
+        } else {
+            Menu("🧲 Encaixe no Topo") {
+                Button(model.isNotchSnapped ? "✓ Encaixe Magnético no Notch" : "Encaixe Magnético no Notch") {
+                    if !model.isNotchSnapped { model.toggleNotchSnap() }
+                }
+                Button(!model.isNotchSnapped ? "✓ Flutuação Livre (Arrastável)" : "Flutuação Livre (Arrastável)") {
+                    if model.isNotchSnapped { model.toggleNotchSnap() }
+                }
             }
         }
 
@@ -277,11 +473,8 @@ struct FocoDSPillView: View {
             Button(model.pillOpacity >= 0.65 && model.pillOpacity < 0.80 ? "✓ 70% (Translúcido)" : "70% (Translúcido)") {
                 model.setPillOpacity(0.70)
             }
-            Button(model.pillOpacity >= 0.45 && model.pillOpacity < 0.65 ? "✓ 50% (Vidro Leve)" : "50% (Vidro Leve)") {
+            Button(model.pillOpacity < 0.65 ? "✓ 50% (Vidro Leve)" : "50% (Vidro Leve)") {
                 model.setPillOpacity(0.50)
-            }
-            Button(model.pillOpacity < 0.45 ? "✓ 30% (Ultra Transparente)" : "30% (Ultra Transparente)") {
-                model.setPillOpacity(0.30)
             }
         }
 
@@ -328,21 +521,49 @@ struct FocoDSPillView: View {
         }
     }
 
+    // MARK: - Status Helpers
     private var statusIndicator: some View {
-        ZStack {
-            if model.isTracking && !model.isBreak {
-                Circle()
-                    .fill(statusColor.opacity(0.35))
-                    .frame(width: 14, height: 14)
+        Button(action: {
+            if model.isPaused {
+                model.resumeCurrentTask()
+            } else {
+                model.toggleCompactCircle()
             }
+        }) {
+            ZStack {
+                if model.isPaused {
+                    Circle()
+                        .fill(Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.22))
+                        .frame(width: 18, height: 18)
 
-            Circle()
-                .fill(statusColor)
-                .frame(width: 7, height: 7)
+                    Circle()
+                        .stroke(Color(red: 255/255, green: 180/255, blue: 0/255), lineWidth: 1.8)
+                        .frame(width: 15, height: 15)
+
+                    Image(systemName: "pause.fill")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(Color(red: 255/255, green: 180/255, blue: 0/255))
+                } else {
+                    if model.isTracking && !model.isBreak {
+                        Circle()
+                            .fill(statusColor.opacity(0.35))
+                            .frame(width: 14, height: 14)
+                    }
+
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 7, height: 7)
+                }
+            }
         }
+        .buttonStyle(.plain)
+        .help(model.isPaused ? "Pausado • Clique para retomar" : "Clique para diminuir para Círculo")
     }
 
     private var statusSubtitle: String {
+        if model.isPaused {
+            return "Pausado • Clique para retomar"
+        }
         if model.isBreak {
             return "Em Pausa"
         }
@@ -362,10 +583,19 @@ struct FocoDSPillView: View {
             let pct = Int(model.progress * 100)
             return "Foco Ativo • \(pct)%"
         }
+        if model.isIdleReminderActive {
+            return "⚡ \(model.idleMinutesWithoutFocus)m sem foco • Retomar?"
+        }
         return "Hábitos"
     }
 
     private var progressGradientColors: [Color] {
+        if model.isPaused {
+            return [
+                Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.35),
+                Color(red: 245/255, green: 158/255, blue: 11/255).opacity(0.18)
+            ]
+        }
         if model.isOvertime {
             return [
                 Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.35),
@@ -379,6 +609,9 @@ struct FocoDSPillView: View {
     }
 
     private var statusColor: Color {
+        if model.isPaused {
+            return Color(red: 255/255, green: 180/255, blue: 0/255) // Amber
+        }
         if model.isBreak {
             return Color(red: 34/255, green: 211/255, blue: 238/255) // Cyan
         }
@@ -388,10 +621,16 @@ struct FocoDSPillView: View {
         if model.isTracking {
             return Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald
         }
+        if model.isIdleReminderActive {
+            return Color(red: 255/255, green: 180/255, blue: 0/255)
+        }
         return Color.white.opacity(0.4)
     }
 
     private var timerColor: Color {
+        if model.isPaused {
+            return Color(red: 255/255, green: 195/255, blue: 70/255) // Warm Amber
+        }
         if model.isBreak {
             return Color(red: 34/255, green: 211/255, blue: 238/255)
         }
@@ -399,7 +638,7 @@ struct FocoDSPillView: View {
             return Color(red: 248/255, green: 113/255, blue: 113/255) // Red/Coral
         }
         if model.isTracking {
-            return Color(red: 52/255, green: 211/255, blue: 153/255)
+            return Color(red: 52/255, green: 211/255, blue: 153/255) // Emerald Light
         }
         return Color.white.opacity(0.7)
     }
@@ -407,6 +646,12 @@ struct FocoDSPillView: View {
     private var borderStrokeColor: Color {
         if model.isPillFlashing {
             return Color(red: 251/255, green: 191/255, blue: 36/255)
+        }
+        if model.isPaused {
+            return Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.45)
+        }
+        if model.isIdleReminderActive {
+            return Color(red: 255/255, green: 180/255, blue: 0/255).opacity(0.55)
         }
         if model.isOvertime {
             return Color(red: 239/255, green: 68/255, blue: 68/255).opacity(0.45)
@@ -448,35 +693,26 @@ struct CircularItemGauge: View {
             VStack(spacing: 3) {
                 // Circular Ring with Icon inside
                 ZStack {
-                    // Outer background ring
                     Circle()
                         .stroke(Color.white.opacity(0.10), lineWidth: 2.6)
                         .frame(width: 28, height: 28)
 
-                    // Active progress ring
                     Circle()
-                        .trim(from: 0, to: max(0.02, min(1.0, progress)))
+                        .trim(from: 0, to: max(0.04, min(1.0, progress)))
                         .stroke(
                             color,
                             style: StrokeStyle(lineWidth: 2.6, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))
                         .frame(width: 28, height: 28)
-                        .animation(.easeInOut(duration: 0.3), value: progress)
+                        .animation(.easeInOut(duration: 0.25), value: progress)
 
-                    // Inner circle
-                    Circle()
-                        .fill(isHovered ? Color.white.opacity(0.20) : Color.white.opacity(0.08))
-                        .frame(width: 22, height: 22)
-
-                    // Centered Icon
                     Text(icon)
-                        .font(.system(size: 11))
+                        .font(.system(size: 13))
                 }
-                .scaleEffect(isHovered ? 1.12 : 1.0)
+                .scaleEffect(isHovered ? 1.08 : 1.0)
                 .animation(.easeInOut(duration: 0.15), value: isHovered)
 
-                // Percentage below icon (estilo anexo: 73%, 21%, etc)
                 Text(percentageText)
                     .font(.system(size: 8.5, weight: .bold, design: .rounded))
                     .foregroundColor(color.opacity(0.95))

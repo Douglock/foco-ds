@@ -1,6 +1,11 @@
 import SwiftUI
 import AppKit
 
+final class FocoDSPillPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 @main
 struct FocoDSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -62,41 +67,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ])
         }
 
-        // 6. Setup Floating Pill Window
+        // 6. Setup Task Creation
+        model.onCreateTask = { [weak b] title, estimateMs in
+            b?.queueCommand([
+                "type": "create_task",
+                "title": title,
+                "timeEstimateMs": estimateMs
+            ])
+        }
+
+        // 7. Setup Floating Pill Window
         setupFloatingPill()
 
-        // 7. Setup Floating Notes Panel Controller
+        // 8. Setup Floating Notes Panel Controller
         notesController = NotesPanelController(model: model, pillWindow: window)
         model.onToggleNotesPanel = { [weak self] in
             self?.notesController?.toggle()
         }
 
-        // 8. Setup Window Reposition Listener
+        // 9. Setup Window Reposition Listener
         model.onWindowRepositionRequested = { [weak self] in
-            self?.applyWindowPosition()
+            guard let self = self else { return }
+            self.applyWindowPosition()
+            if self.model.showTaskCreateCard {
+                self.window?.makeKeyAndOrderFront(nil)
+            }
         }
 
-        // 9. Register Global Hotkey ⌥ + F (Toggle Notes / Focus HUD)
+        // 10. Register Global Hotkey ⌥ + F (Toggle Notes / Focus HUD)
         GlobalHotkeyManager.shared.onHotKeyTriggered = { [weak self] in
             guard let self = self else { return }
             self.notesController?.toggle()
-            if self.model.isNotchSnapped {
-                self.applyWindowPosition()
-            }
+            self.applyWindowPosition()
         }
         GlobalHotkeyManager.shared.registerDefaultHotKey()
 
-        // 10. Setup Menu Bar Status Item
+        // 11. Setup Menu Bar Status Item
         setupStatusItem()
     }
 
     private func setupFloatingPill() {
-        let pillWidth: CGFloat = 340
-        let pillHeight: CGFloat = 40
-
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: pillWidth, height: pillHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
+        let panel = FocoDSPillPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 56, height: 340),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -119,21 +132,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyWindowPosition() {
         guard let panel = window, let screen = NSScreen.main else { return }
-        let pillWidth = panel.frame.width
-        let pillHeight = panel.frame.height
 
-        if model.isNotchSnapped {
-            // Snapped directly flush under top edge (MacBook notch)
-            let screenFrame = screen.frame
-            let x = screenFrame.origin.x + (screenFrame.width - pillWidth) / 2
-            let y = screenFrame.maxY - pillHeight
+        if model.visualStyle == "lateral" {
+            let targetWidth: CGFloat = model.showTaskCreateCard ? 336 : 56
+            let targetHeight: CGFloat = 340
+            panel.setContentSize(NSSize(width: targetWidth, height: targetHeight))
+
+            let y = screen.frame.midY - targetHeight / 2 + 20
+            let x: CGFloat
+            if model.dockSide == "right" {
+                x = screen.frame.maxX - targetWidth
+            } else {
+                x = screen.frame.minX
+            }
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         } else {
-            // Free floating default near top with safe padding
-            let screenRect = screen.visibleFrame
-            let x = screenRect.origin.x + (screenRect.width - pillWidth) / 2
-            let y = screenRect.origin.y + screenRect.height - pillHeight - 10
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            let targetWidth: CGFloat = model.isCompactCircle ? 44 : max(260, min(800, model.pillWidth))
+            let targetHeight: CGFloat = model.isCompactCircle ? 42 : 40
+            panel.setContentSize(NSSize(width: targetWidth, height: targetHeight))
+
+            if model.isNotchSnapped {
+                let screenFrame = screen.frame
+                let x = screenFrame.origin.x + (screenFrame.width - targetWidth) / 2
+                let y = screenFrame.maxY - targetHeight
+                panel.setFrameOrigin(NSPoint(x: x, y: y))
+            } else {
+                let screenRect = screen.visibleFrame
+                let x = screenRect.origin.x + (screenRect.width - targetWidth) / 2
+                let y = screenRect.origin.y + screenRect.height - targetHeight - 10
+                panel.setFrameOrigin(NSPoint(x: x, y: y))
+            }
         }
     }
 
@@ -179,10 +207,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleStyle() {
-        if model.visualStyle == "classic" {
-            model.setVisualStyle("circular")
-        } else {
+        if model.visualStyle == "lateral" {
             model.setVisualStyle("classic")
+        } else {
+            model.setVisualStyle("lateral")
         }
     }
 

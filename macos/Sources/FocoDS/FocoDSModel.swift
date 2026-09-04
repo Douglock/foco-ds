@@ -40,12 +40,19 @@ final class FocoDSModel: ObservableObject {
     // Visual Flash Pulse on Pill
     @Published var isPillFlashing: Bool = false
 
-    // Callbacks to send commands to Super Productivity
+    // User Preferences (Persisted)
+    @Published var pillOpacity: Double = 0.88
+    @Published var isNotchSnapped: Bool = true
+    @Published var visualStyle: String = "classic" // "classic" or "circular"
+    @Published var playAudioOnStart: Bool = true
+
+    // Callbacks to send commands to Super Productivity & Window Manager
     var onNotesSaved: ((_ taskId: String, _ notes: String) -> Void)?
     var onToggleNotesPanel: (() -> Void)?
     var onHabitClicked: ((_ habitId: String) -> Void)?
     var onTaskClicked: ((_ taskId: String?) -> Void)?
     var onUpdateEstimate: ((_ taskId: String, _ estimateMs: Int64) -> Void)?
+    var onWindowRepositionRequested: (() -> Void)?
 
     private var timerCancellable: AnyCancellable?
     private var previousIsTracking: Bool = false
@@ -56,6 +63,20 @@ final class FocoDSModel: ObservableObject {
 
     init() {
         self.notesText = UserDefaults.standard.string(forKey: "foco_ds_side_notes") ?? ""
+
+        // Load persisted settings
+        let savedOpacity = UserDefaults.standard.double(forKey: "foco_ds_opacity")
+        self.pillOpacity = savedOpacity > 0.1 ? savedOpacity : 0.88
+
+        if let savedNotch = UserDefaults.standard.object(forKey: "foco_ds_notch_snapped") as? Bool {
+            self.isNotchSnapped = savedNotch
+        }
+
+        self.visualStyle = UserDefaults.standard.string(forKey: "foco_ds_visual_style") ?? "classic"
+
+        if let savedAudio = UserDefaults.standard.object(forKey: "foco_ds_play_audio") as? Bool {
+            self.playAudioOnStart = savedAudio
+        }
 
         // Local clock ticking smoothly every second
         timerCancellable = Timer.publish(every: 1.0, on: .main, in: .common)
@@ -77,6 +98,28 @@ final class FocoDSModel: ObservableObject {
                     }
                 }
             }
+    }
+
+    func setPillOpacity(_ value: Double) {
+        let clamped = min(1.0, max(0.20, value))
+        self.pillOpacity = clamped
+        UserDefaults.standard.set(clamped, forKey: "foco_ds_opacity")
+    }
+
+    func toggleNotchSnap() {
+        self.isNotchSnapped.toggle()
+        UserDefaults.standard.set(self.isNotchSnapped, forKey: "foco_ds_notch_snapped")
+        onWindowRepositionRequested?()
+    }
+
+    func setVisualStyle(_ style: String) {
+        self.visualStyle = style
+        UserDefaults.standard.set(style, forKey: "foco_ds_visual_style")
+    }
+
+    func togglePlayAudio() {
+        self.playAudioOnStart.toggle()
+        UserDefaults.standard.set(self.playAudioOnStart, forKey: "foco_ds_play_audio")
     }
 
     var hasEstimate: Bool {
@@ -135,9 +178,9 @@ final class FocoDSModel: ObservableObject {
             }
         }
 
-        // 1. Trigger Green Screen Flash when user hits PLAY
+        // 1. Trigger Green Screen Edge Flash when user hits PLAY
         if triggerPlayFlash || (!wasTracking && newlyTracking) {
-            ScreenFlashController.triggerPlayFlash()
+            ScreenFlashController.triggerPlayFlash(playSound: playAudioOnStart)
         }
 
         // 2. Trigger Red Screen Flash when estimate is exceeded or focus finished
@@ -237,10 +280,36 @@ final class FocoDSModel: ObservableObject {
         }
     }
 
-    // Displays both spent and estimate if present, e.g. "33:03 / 15m"
+    // Formatted remaining time when estimate exists (counts down: 15:00 -> 14:59...)
+    var formattedCountdown: String {
+        let remainingMs = timeEstimateMs - timeSpentMs
+        if remainingMs >= 0 {
+            let totalSeconds = Int(remainingMs / 1000)
+            let hours = totalSeconds / 3600
+            let minutes = (totalSeconds % 3600) / 60
+            let seconds = totalSeconds % 60
+            if hours > 0 {
+                return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                return String(format: "%02d:%02d", minutes, seconds)
+            }
+        } else {
+            let overtimeSec = Int(abs(remainingMs) / 1000)
+            let hours = overtimeSec / 3600
+            let minutes = (overtimeSec % 3600) / 60
+            let seconds = overtimeSec % 60
+            if hours > 0 {
+                return String(format: "+%02d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                return String(format: "+%02d:%02d", minutes, seconds)
+            }
+        }
+    }
+
+    // Displays countdown if estimate is present, e.g. "14:50 / 15m" (counts down)
     var formattedTime: String {
         if hasEstimate {
-            return "\(formattedTimeSpent) / \(formattedEstimate)"
+            return "\(formattedCountdown) / \(formattedEstimate)"
         }
 
         if remainingSeconds > 0 {

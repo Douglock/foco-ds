@@ -1,4 +1,8 @@
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   console.log("Conectando ao Super Productivity via CDP (127.0.0.1:9222)...");
@@ -23,35 +27,41 @@ async function main() {
   await new Promise((resolve) => { ws.onopen = resolve; });
 
   let msgId = 1;
-  function send(method, params = {}) {
-    return new Promise((resolve) => {
+  const send = (method, params = {}) =>
+    new Promise((resolve, reject) => {
       const id = msgId++;
-      const onMessage = (event) => {
-        const res = JSON.parse(event.data);
-        if (res.id === id) {
-          ws.removeEventListener("message", onMessage);
-          resolve(res.result);
+      const handler = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.id === id) {
+          ws.removeEventListener("message", handler);
+          if (data.error) reject(data.error);
+          else resolve(data.result);
         }
       };
-      ws.addEventListener("message", onMessage);
+      ws.addEventListener("message", handler);
       ws.send(JSON.stringify({ id, method, params }));
     });
-  }
 
-  await send("Page.enable");
-  await send("DOM.enable");
-  await send("Runtime.enable");
+  console.log("1. Abrindo configurações do Super Productivity...");
+  await send("Runtime.evaluate", {
+    expression: `
+      (() => {
+        const btn = document.querySelector('button[mat-menu-item], button.mat-menu-trigger, nav button, header button');
+        // Aciona o atalho de navegação para settings ou o botão de engrenagem se houver
+        window.location.hash = '#/config';
+        return { ok: true };
+      })()
+    `,
+    returnByValue: true
+  });
+  await new Promise((r) => setTimeout(r, 1200));
 
-  console.log("1. Navegando para Configurações...");
-  await send("Runtime.evaluate", { expression: "window.location.hash = '#/config';" });
-  await new Promise((r) => setTimeout(r, 1000));
-
-  console.log("2. Clicando na aba Plugins (Tab 4 - extension)...");
+  console.log("2. Procurando aba de Extensões / Plugins...");
   const tabResult = await send("Runtime.evaluate", {
     expression: `
       (() => {
-        const tabs = Array.from(document.querySelectorAll(".mat-mdc-tab, .mat-tab-label, [role=\\"tab\\"]"));
-        const extTab = tabs.find(t => t.innerText.includes("extension") || t.innerHTML.includes("extension") || (t.innerText || '').toLowerCase().includes("plugin"));
+        const tabs = Array.from(document.querySelectorAll('.mat-tab-label, .mat-mdc-tab, button, a'));
+        const extTab = tabs.find(t => t.innerText && (t.innerText.includes('Extensões') || t.innerText.includes('Plugins') || t.innerText.includes('Extensions')));
         if (extTab) {
           extTab.click();
           return { ok: true, text: extTab.innerText };
@@ -65,7 +75,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 1200));
 
   console.log("3. Injetando ZIP do Foco DS...");
-  const zipPath = "/Users/douglassantana/.gemini/antigravity-ide/scratch/foco-ds/release/foco-ds-super-productivity.zip";
+  const zipPath = path.resolve(__dirname, "../release/foco-ds-super-productivity.zip");
   if (!fs.existsSync(zipPath)) {
     console.error("Arquivo ZIP não encontrado em:", zipPath);
     process.exit(1);

@@ -85,25 +85,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.notesController?.toggle()
         }
 
-        // 9. Setup Window Reposition Listener
+        // 9. Setup Window Reposition Listener with Async Debounce
         model.onWindowRepositionRequested = { [weak self] in
-            guard let self = self else { return }
-            self.applyWindowPosition()
-            if self.model.showTaskCreateCard {
-                self.window?.makeKeyAndOrderFront(nil)
-            }
+            self?.scheduleWindowReposition()
         }
 
         // 10. Register Global Hotkey ⌥ + F (Toggle Notes / Focus HUD)
         GlobalHotkeyManager.shared.onHotKeyTriggered = { [weak self] in
             guard let self = self else { return }
             self.notesController?.toggle()
-            self.applyWindowPosition()
+            self.scheduleWindowReposition()
         }
         GlobalHotkeyManager.shared.registerDefaultHotKey()
 
         // 11. Setup Menu Bar Status Item
         setupStatusItem()
+    }
+
+    private var repositionWorkItem: DispatchWorkItem?
+
+    private func scheduleWindowReposition() {
+        repositionWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.applyWindowPosition()
+            if self.model.showTaskCreateCard {
+                self.window?.makeKeyAndOrderFront(nil)
+            }
+        }
+        repositionWorkItem = item
+        DispatchQueue.main.async(execute: item)
     }
 
     private func setupFloatingPill() {

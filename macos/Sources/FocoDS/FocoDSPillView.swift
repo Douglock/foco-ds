@@ -5,6 +5,7 @@ struct FocoDSPillView: View {
     @ObservedObject var model: FocoDSModel
     @State private var isHovering = false
     @State private var showTooltipCard = false
+    @State private var dragInitialWidth: CGFloat? = nil
 
     var body: some View {
         Group {
@@ -162,28 +163,35 @@ struct FocoDSPillView: View {
         }
     }
 
-    // Alça de Redimensionamento Interativo (Arrastar pros lados para aumentar/diminuir)
+    // Alça de Redimensionamento Interativo Seguro (Limites estritos de 260px a 760px)
     private func resizeHandle(isLeft: Bool) -> some View {
         ZStack {
             Capsule()
-                .fill(Color.white.opacity(0.25))
+                .fill(Color.white.opacity(0.35))
                 .frame(width: 3.5, height: 16)
         }
-        .frame(width: 10, height: 28)
+        .frame(width: 14, height: 28)
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 2)
+            DragGesture(minimumDistance: 1)
                 .onChanged { value in
-                    let delta = isLeft ? -value.translation.width : value.translation.width
-                    let candidate = model.pillWidth + delta * 0.8
-                    if candidate < 120 {
-                        model.isCompactCircle = true
-                    } else {
+                    if dragInitialWidth == nil {
+                        dragInitialWidth = model.pillWidth
+                    }
+                    guard let startWidth = dragInitialWidth else { return }
+                    let delta = (isLeft ? -value.translation.width : value.translation.width) * 1.8
+                    // STRICT SAFETY BOUNDS: Minimum 260px, Maximum 760px!
+                    let candidate = max(260, min(760, startWidth + delta))
+                    if abs(model.pillWidth - candidate) >= 2 {
                         model.setPillWidth(candidate)
                     }
                 }
+                .onEnded { _ in
+                    dragInitialWidth = nil
+                    UserDefaults.standard.set(Double(model.pillWidth), forKey: "foco_ds_pill_width")
+                }
         )
-        .help("Arraste para aumentar ou diminuir a largura da pílula")
+        .help("Arraste para aumentar ou diminuir a largura")
     }
 
     // MARK: - Classic Active Task View (Suporta todo título e tempo estimado sem cortes)
